@@ -1,0 +1,79 @@
+---
+alwaysApply: true
+---
+It is a FastAPI project that is structured DDD-like monular monolith architecture. Here is the project structure. You have follow this structure along the project.
+
+fastapi-modular-postgres
+├── alembic/
+├── src
+│   ├── auth
+│   │   ├── router.py
+│   │   ├── schemas.py  # pydantic models
+│   │   ├── models.py  # db models
+│   │   ├── dependencies.py
+│   │   ├── config.py  # local configs
+│   │   ├── constants.py
+│   │   ├── exceptions.py
+│   │   ├── service.py
+│   │   └── utils.py
+│   ├── client-like
+│   │   ├── client.py  # client model for external service communication
+│   │   ├── schemas.py
+│   │   ├── config.py
+│   │   ├── constants.py
+│   │   ├── exceptions.py
+│   │   └── utils.py
+│   └── users
+│   │   ├── router.py
+│   │   ├── schemas.py
+│   │   ├── models.py
+│   │   ├── dependencies.py
+│   │   ├── config.py
+│   │   ├── constants.py
+│   │   ├── exceptions.py
+│   │   ├── service.py
+│   │   └── utils.py
+│   ├── config.py  # global configs
+│   ├── models.py  # global models
+│   ├── exceptions.py  # global exceptions
+│   ├── pagination.py  # global module e.g. pagination
+│   ├── database.py  # db connection related stuff
+│   └── main.py
+├── tests/ # we do not have test for the now. Do not implement tests.
+│   ├── auth
+│   ├── aws
+│   └── posts
+├── templates/
+│   └── index.html
+├── .env
+├── .gitignore
+├── logging.ini
+├── pyproject.toml
+├── Dockerfile
+├── docker-compose.yaml
+└── alembic.ini
+
+Here is the techstack of the project:
+- FastAPI
+- PostgreSQL
+- SQLAlchemy ORM 2.0
+- Pydantic
+- Alembic
+- uv: for package management
+- ruff: for linting and formatting
+
+To create a new module you have to add the following files into the module:
+├── router.py
+├── schemas.py
+├── models.py
+├── dependencies.py
+├── config.py
+├── constants.py
+├── exceptions.py
+├── service.py
+└── utils.py
+
+Instructions:
+- Do not implement anything that goes beyond what the user has already told you. Always be parallel with the user.
+- If the user ask you a question, give the answer do not directly implement it.
+- If you are going to add a python package use uv add without specifying the package version.
