@@ -36,7 +36,9 @@ fastapi-modular-postgres
 │   ├── config.py  # global configs
 │   ├── models.py  # global models
 │   ├── exceptions.py  # global exceptions
-│   ├── pagination.py  # global module e.g. pagination
+│   ├── pagination.py  # pagination settings
+│   ├── rate_limit.py  # rate limit config
+│   ├── logger.py  # db connection related stuff
 │   ├── database.py  # db connection related stuff
 │   └── main.py
 ├── tests/ # we do not have test for the now. Do not implement tests.
