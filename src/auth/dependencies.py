@@ -11,7 +11,10 @@ from src.auth.exceptions import (
 from src.auth.service import get_user_from_token
 from src.auth.utils import verify_access_token
 from src.database import get_db
+from src.logger import get_logger
 from src.users.models import User
+
+logger = get_logger(__name__)
 
 
 async def get_token_from_header(authorization: str | None = Header(None)) -> str:
@@ -60,12 +63,14 @@ async def get_current_user(
     user_id_str = verify_access_token(token)
 
     if not user_id_str:
+        logger.warning("Invalid token provided")
         raise InvalidTokenException()
 
     # Convert to UUID
     try:
         user_id = uuid.UUID(user_id_str)
     except (ValueError, AttributeError):
+        logger.warning(f"Invalid UUID format in token: {user_id_str}")
         raise InvalidTokenException() from None
 
     # Get user from database
@@ -108,6 +113,9 @@ async def require_superuser(
         InsufficientPermissionsException: If user is not a superuser
     """
     if not current_user.is_superuser:
+        logger.warning(
+            f"Non-superuser attempted superuser action: {current_user.email} (ID: {current_user.id})"
+        )
         raise InsufficientPermissionsException(required_permission="superuser")
 
     return current_user

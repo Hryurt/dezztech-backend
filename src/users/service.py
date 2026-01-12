@@ -3,8 +3,11 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.logger import get_logger
 from src.users.exceptions import UserAlreadyExistsException, UserNotFoundException
 from src.users.models import User
+
+logger = get_logger(__name__)
 
 
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User:
@@ -22,6 +25,7 @@ async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User:
     """
     user = await db.get(User, user_id)
     if not user:
+        logger.warning(f"User not found: {user_id}")
         raise UserNotFoundException(user_id=user_id)
     return user
 
@@ -68,6 +72,7 @@ async def create_user(
     # Check if user already exists
     existing_user = await get_user_by_email(db, email)
     if existing_user:
+        logger.warning(f"Attempt to create duplicate user: {email}")
         raise UserAlreadyExistsException(email=email)
 
     # Create new user
@@ -82,5 +87,7 @@ async def create_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    logger.info(f"User created: {email} (ID: {user.id}, superuser: {is_superuser})")
 
     return user

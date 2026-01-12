@@ -14,20 +14,24 @@ from src.exceptions import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from src.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan events for startup and shutdown."""
     # Startup
-    print("🚀 Application startup")
-    print(f"Environment: {settings.ENVIRONMENT}")
-    print(f"Project: {settings.PROJECT_NAME}")
+    logger.info("🚀 Application startup")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Project: {settings.PROJECT_NAME}")
+    logger.info(f"API Prefix: {settings.API_V1_PREFIX}")
 
     yield
 
     # Shutdown
-    print("🛑 Application shutdown")
+    logger.info("🛑 Application shutdown")
 
 
 # Create FastAPI application
@@ -51,13 +55,13 @@ if settings.BACKEND_CORS_ORIGINS:
     )
 
 
-# Custom middleware for request logging (optional)
+# Custom middleware for request logging
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log incoming requests."""
-    print(f"📥 {request.method} {request.url.path}")
+    logger.info(f"📥 {request.method} {request.url.path}")
     response = await call_next(request)
-    print(f"📤 {request.method} {request.url.path} - {response.status_code}")
+    logger.info(f"📤 {request.method} {request.url.path} - {response.status_code}")
     return response
 
 

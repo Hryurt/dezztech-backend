@@ -5,9 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.exceptions import InvalidCredentialsException
 from src.auth.schemas import LoginRequest, RegisterRequest
 from src.auth.utils import create_access_token, hash_password, verify_password
+from src.logger import get_logger
 from src.users.exceptions import UserInactiveException
 from src.users.models import User
 from src.users.service import create_user, get_user_by_email
+
+logger = get_logger(__name__)
 
 
 async def register(db: AsyncSession, data: RegisterRequest) -> str:
@@ -36,6 +39,8 @@ async def register(db: AsyncSession, data: RegisterRequest) -> str:
         is_superuser=False,  # Default not superuser
     )
 
+    logger.info(f"New user registered: {user.email} (ID: {user.id})")
+
     # Generate access token
     access_token = create_access_token(subject=user.id)
 
@@ -61,11 +66,15 @@ async def login(db: AsyncSession, data: LoginRequest) -> str:
 
     # Check if user exists and password is correct
     if not user or not verify_password(data.password, user.hashed_password):
+        logger.warning(f"Failed login attempt for email: {data.email}")
         raise InvalidCredentialsException()
 
     # Check if user is active
     if not user.is_active:
+        logger.warning(f"Inactive user login attempt: {user.email} (ID: {user.id})")
         raise UserInactiveException(user_id=user.id)
+
+    logger.info(f"User logged in: {user.email} (ID: {user.id})")
 
     # Generate access token
     access_token = create_access_token(subject=user.id)
