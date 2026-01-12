@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -32,7 +33,7 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     """Schema for user API response."""
 
-    id: int
+    id: uuid.UUID
     is_active: bool
     is_superuser: bool
     created_at: datetime

@@ -1,13 +1,15 @@
+import uuid
+
 from src.exceptions import ConflictException, NotFoundException
 
 
 class UserNotFoundException(NotFoundException):
     """Exception raised when a user is not found."""
 
-    def __init__(self, user_id: int | None = None, email: str | None = None):
+    def __init__(self, user_id: uuid.UUID | None = None, email: str | None = None):
         if user_id:
             message = f"User with id {user_id} not found"
-            details = {"user_id": user_id}
+            details = {"user_id": str(user_id)}
         elif email:
             message = f"User with email {email} not found"
             details = {"email": email}
@@ -36,9 +38,9 @@ class UserAlreadyExistsException(ConflictException):
 class UserInactiveException(ConflictException):
     """Exception raised when trying to perform action on inactive user."""
 
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: uuid.UUID):
         super().__init__(
             message=f"User with id {user_id} is inactive",
             error_code="USER_INACTIVE",
-            details={"user_id": user_id},
+            details={"user_id": str(user_id)},
         )

@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str
+    ALEMBIC_DATABASE_URL: str | None = None  # Optional: for local migrations, falls back to DATABASE_URL
 
     # Environment
     ENVIRONMENT: Literal["development", "staging", "production"] = "development"

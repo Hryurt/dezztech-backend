@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.exceptions import InvalidCredentialsException
@@ -71,7 +73,7 @@ async def login(db: AsyncSession, data: LoginRequest) -> str:
     return access_token
 
 
-async def get_user_from_token(db: AsyncSession, user_id: int) -> User:
+async def get_user_from_token(db: AsyncSession, user_id: uuid.UUID) -> User:
     """Get user from database by user_id (from token).
 
     Args:

@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,7 +7,7 @@ from src.users.exceptions import UserAlreadyExistsException, UserNotFoundExcepti
 from src.users.models import User
 
 
-async def get_user_by_id(db: AsyncSession, user_id: int) -> User:
+async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User:
     """Get a user by ID.
 
     Args:

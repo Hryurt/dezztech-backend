@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -48,7 +49,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # ==================== JWT Token Generation ====================
 
 
-def create_access_token(subject: str | int, expires_delta: timedelta | None = None) -> str:
+def create_access_token(subject: str | int | uuid.UUID, expires_delta: timedelta | None = None) -> str:
     """Create a new JWT access token.
 
     Args:

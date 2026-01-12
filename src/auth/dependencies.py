@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,10 +62,10 @@ async def get_current_user(
     if not user_id_str:
         raise InvalidTokenException()
 
-    # Convert to int
+    # Convert to UUID
     try:
-        user_id = int(user_id_str)
-    except ValueError:
+        user_id = uuid.UUID(user_id_str)
+    except (ValueError, AttributeError):
         raise InvalidTokenException() from None
 
     # Get user from database

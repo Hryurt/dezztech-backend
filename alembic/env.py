@@ -21,8 +21,10 @@ from src.users.models import *  # noqa: F401, F403
 # access to the values within the .ini file in use.
 config = context.config
 
-# Override sqlalchemy.url with the one from our config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Override sqlalchemy.url with ALEMBIC_DATABASE_URL (for local migrations)
+# Falls back to DATABASE_URL if ALEMBIC_DATABASE_URL is not set
+database_url = settings.ALEMBIC_DATABASE_URL or settings.DATABASE_URL
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
