@@ -1,0 +1,12 @@
+# Password constraints
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 100
+
+# User constraints
+FULL_NAME_MAX_LENGTH = 255
+EMAIL_MAX_LENGTH = 255
+
+# Default values
+DEFAULT_IS_ACTIVE = True
+DEFAULT_IS_SUPERUSER = False
+
