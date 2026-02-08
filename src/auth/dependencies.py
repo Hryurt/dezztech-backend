@@ -8,13 +8,26 @@ from src.auth.exceptions import (
     InvalidTokenException,
     TokenMissingException,
 )
-from src.auth.service import get_user_from_token
+from src.auth.service import AuthService
 from src.auth.utils import verify_access_token
 from src.database import get_db
 from src.logger import get_logger
+from src.users.exceptions import UserInactiveException
 from src.users.models import User
 
 logger = get_logger(__name__)
+
+
+def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+    """Get AuthService instance with database session.
+
+    Args:
+        db: Database session from dependency
+
+    Returns:
+        AuthService instance
+    """
+    return AuthService(db)
 
 
 async def get_token_from_header(authorization: str | None = Header(None)) -> str:
@@ -34,7 +47,7 @@ async def get_token_from_header(authorization: str | None = Header(None)) -> str
 
     # Remove "Bearer " prefix
     if authorization.startswith("Bearer "):
-        token = authorization[7:]  # len("Bearer ") = 7
+        token = authorization[7:]
     else:
         token = authorization
 
@@ -43,13 +56,13 @@ async def get_token_from_header(authorization: str | None = Header(None)) -> str
 
 async def get_current_user(
     token: str = Depends(get_token_from_header),
-    db: AsyncSession = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> User:
-    """Get current authenticated user from JWT token.
+    """Get current authenticated user from JWT token (active or inactive).
 
     Args:
         token: JWT token from Authorization header
-        db: Database session
+        auth_service: AuthService instance
 
     Returns:
         Current user object
@@ -57,7 +70,6 @@ async def get_current_user(
     Raises:
         InvalidTokenException: If token is invalid or expired
         UserNotFoundException: If user not found
-        UserInactiveException: If user is inactive
     """
     # Verify token and get user_id
     user_id_str = verify_access_token(token)
@@ -73,8 +85,8 @@ async def get_current_user(
         logger.warning(f"Invalid UUID format in token: {user_id_str}")
         raise InvalidTokenException() from None
 
-    # Get user from database
-    user = await get_user_from_token(db, user_id)
+    # Get user from database (no active check)
+    user = await auth_service.get_user_by_id(user_id)
 
     return user
 
@@ -82,7 +94,7 @@ async def get_current_user(
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Get current active user (additional check for active status).
+    """Get current active user from JWT token.
 
     Args:
         current_user: Current user from get_current_user
@@ -90,11 +102,15 @@ async def get_current_active_user(
     Returns:
         Current active user object
 
-    Note:
-        This is redundant as get_current_user already checks is_active,
-        but kept for explicit active user requirement in routes.
+    Raises:
+        UserInactiveException: If user is inactive
     """
-    # Already checked in get_user_from_token, but explicit is better
+    if not current_user.is_active:
+        logger.warning(
+            f"Inactive user attempted to access protected resource: {current_user.email} (ID: {current_user.id})"
+        )
+        raise UserInactiveException(user_id=current_user.id)
+
     return current_user
 
 

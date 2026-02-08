@@ -19,6 +19,14 @@ class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=100)
 
 
+# Schema for internal user creation (with additional fields)
+class UserCreateInternal(UserCreate):
+    """Schema for internal user creation with system flags."""
+
+    is_active: bool = True
+    is_superuser: bool = False
+
+
 # Schema for updating a user
 class UserUpdate(BaseModel):
     """Schema for updating user information."""

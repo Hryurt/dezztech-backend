@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth.dependencies import get_current_user
+from src.auth.dependencies import get_auth_service, get_current_user
 from src.auth.schemas import LoginRequest, RegisterRequest, TokenResponse
-from src.auth.service import login, register
-from src.database import get_db
+from src.auth.service import AuthService
 from src.users.models import User
 from src.users.schemas import UserResponse
 
@@ -20,7 +18,7 @@ router = APIRouter()
 )
 async def register_user(
     data: RegisterRequest,
-    db: AsyncSession = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """Register a new user.
 
@@ -30,7 +28,7 @@ async def register_user(
 
     Returns JWT access token for immediate login.
     """
-    access_token = await register(db=db, data=data)
+    access_token = await auth_service.register(data=data)
 
     return TokenResponse(
         access_token=access_token,
@@ -47,7 +45,7 @@ async def register_user(
 )
 async def login_user(
     data: LoginRequest,
-    db: AsyncSession = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """Login user with email and password.
 
@@ -56,7 +54,7 @@ async def login_user(
 
     Returns JWT access token.
     """
-    access_token = await login(db=db, data=data)
+    access_token = await auth_service.login(data=data)
 
     return TokenResponse(
         access_token=access_token,

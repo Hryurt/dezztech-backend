@@ -1,7 +1,7 @@
 ---
 alwaysApply: true
 ---
-It is a FastAPI project that is structured DDD-like monular monolith architecture. Here is the project structure. You have follow this structure along the project.
+It is a FastAPI project that is structured DDD-like modular monolith architecture with domain-driven design principles. Here is the project structure. You have to follow this structure along the project.
 
 fastapi-modular-postgres
 ├── alembic/
@@ -75,7 +75,93 @@ To create a new module you have to add the following files into the module:
 ├── service.py
 └── utils.py
 
+## DDD Architecture Principles
+
+This project follows Domain-Driven Design (DDD) principles with the following architectural patterns:
+
+### Models Layer (`models.py`)
+- Contains SQLAlchemy ORM models with **domain logic**
+- **Domain Methods (Instance Methods)**: Business logic that operates on a single entity instance
+  - Example: `user.activate()`, `user.check_password(password)`, `user.deactivate()`
+  - These methods modify the entity state but do NOT commit to database
+  - Should be synchronous unless they need to interact with external resources
+- **Query Methods (Class Methods)**: Data access patterns for retrieving entities
+  - Example: `User.get_by_id(db, user_id)`, `User.get_by_email(db, email)`, `User.exists(db, email)`
+  - All query methods are `async` and accept `AsyncSession` as first parameter
+  - Return `Optional[Model]`, `list[Model]`, or `Model` depending on the query
+  - Handle database queries using SQLAlchemy select statements
+
+### Service Layer (`service.py`)
+- Contains **class-based services** (NOT standalone functions)
+- Services are orchestrators that coordinate domain logic and handle business workflows
+- Each service class is initialized with `AsyncSession` in `__init__`
+- Services handle:
+  - Business orchestration (calling multiple domain methods)
+  - Transaction management (commit, refresh, rollback)
+  - Exception handling and logging
+  - Cross-entity operations
+- Example structure:
+  ```python
+  class UserService:
+      def __init__(self, db: AsyncSession):
+          self.db = db
+      
+      async def create_user(self, ...):
+          # Uses User.exists() and User.create()
+          # Handles exceptions and logging
+  ```
+
+### Dependencies Layer (`dependencies.py`)
+- Provides **service factory functions** for dependency injection
+- Factory functions create service instances with database session
+- Example:
+  ```python
+  def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
+      return UserService(db)
+  ```
+- Also contains route-level dependencies (authentication, authorization, etc.)
+
+### Router Layer (`router.py`)
+- HTTP layer that handles requests and responses
+- Injects services via dependency injection
+- Should be thin - delegates all business logic to services
+- Example:
+  ```python
+  @router.post("/register")
+  async def register_user(
+      data: RegisterRequest,
+      auth_service: AuthService = Depends(get_auth_service),
+  ):
+      return await auth_service.register(data)
+  ```
+
+### Schemas Layer (`schemas.py`)
+- Pydantic models for request/response validation
+- No business logic - only data validation and serialization
+
+### Async/Await Pattern
+- **All database operations are async** using `AsyncSession`
+- Model query methods (class methods) are async
+- Service methods are async
+- Router handlers are async
+- Domain methods (instance methods) are sync unless they need DB/external access
+
+### Separation of Concerns
+- **Models**: Domain logic + data access (query methods)
+- **Services**: Business orchestration + exception handling + transaction management
+- **Routers**: HTTP layer + request/response handling
+- **Dependencies**: Service factory pattern + route-level guards
+- **Schemas**: Data validation and serialization
+
+### Database Operations
+- Query methods in models return entities but don't commit
+- Services handle commit/refresh/rollback operations
+- Instance methods modify state but don't commit
+- Use `await db.commit()` and `await db.refresh(obj)` in services
+
 Instructions:
 - Do not implement anything that goes beyond what the user has already told you. Always be parallel with the user.
 - If the user ask you a question, give the answer do not directly implement it.
 - If you are going to add a python package use uv add without specifying the package version.
+- Follow the DDD architecture patterns described above when creating or modifying code.
+- Always use class-based services with dependency injection, not standalone functions.

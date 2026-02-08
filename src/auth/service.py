@@ -4,104 +4,106 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.exceptions import InvalidCredentialsException
 from src.auth.schemas import LoginRequest, RegisterRequest
-from src.auth.utils import create_access_token, hash_password, verify_password
+from src.auth.utils import create_access_token
 from src.logger import get_logger
-from src.users.exceptions import UserInactiveException
+from src.users.exceptions import UserInactiveException, UserNotFoundException
 from src.users.models import User
-from src.users.service import create_user, get_user_by_email
+from src.users.schemas import UserCreateInternal
 
 logger = get_logger(__name__)
 
 
-async def register(db: AsyncSession, data: RegisterRequest) -> str:
-    """Register a new user.
+class AuthService:
+    """Service for authentication operations."""
 
-    Args:
-        db: Database session
-        data: Registration data (email, password, full_name)
+    def __init__(self, db: AsyncSession):
+        """Initialize AuthService with database session.
 
-    Returns:
-        JWT access token
+        Args:
+            db: Database session
+        """
+        self.db = db
 
-    Raises:
-        UserAlreadyExistsException: If user with email already exists
-    """
-    # Hash password
-    hashed_password = hash_password(data.password)
+    async def register(self, data: RegisterRequest) -> str:
+        """Register a new user.
 
-    # Create user with default values
-    user = await create_user(
-        db=db,
-        email=data.email,
-        hashed_password=hashed_password,
-        full_name=data.full_name,
-        is_active=True,  # Default active
-        is_superuser=False,  # Default not superuser
-    )
+        Args:
+            data: Registration data (email, password, full_name)
 
-    logger.info(f"New user registered: {user.email} (ID: {user.id})")
+        Returns:
+            JWT access token
 
-    # Generate access token
-    access_token = create_access_token(subject=user.id)
+        Raises:
+            UserAlreadyExistsException: If user with email already exists
+        """
+        # Create user data with default flags
+        user_data = UserCreateInternal(
+            email=data.email,
+            password=data.password,
+            full_name=data.full_name,
+            is_active=True,
+            is_superuser=False,
+        )
 
-    return access_token
+        # Create user (password will be hashed in User.create)
+        user = await User.create(db=self.db, data=user_data)
 
+        logger.info(f"New user registered: {user.email} (ID: {user.id})")
 
-async def login(db: AsyncSession, data: LoginRequest) -> str:
-    """Authenticate user and return access token.
+        # Generate access token
+        access_token = create_access_token(subject=user.id)
 
-    Args:
-        db: Database session
-        data: Login credentials (email, password)
+        return access_token
 
-    Returns:
-        JWT access token
+    async def login(self, data: LoginRequest) -> str:
+        """Authenticate user and return access token.
 
-    Raises:
-        InvalidCredentialsException: If credentials are invalid
-        UserInactiveException: If user is inactive
-    """
-    # Get user by email
-    user = await get_user_by_email(db, data.email)
+        Args:
+            data: Login credentials (email, password)
 
-    # Check if user exists and password is correct
-    if not user or not verify_password(data.password, user.hashed_password):
-        logger.warning(f"Failed login attempt for email: {data.email}")
-        raise InvalidCredentialsException()
+        Returns:
+            JWT access token
 
-    # Check if user is active
-    if not user.is_active:
-        logger.warning(f"Inactive user login attempt: {user.email} (ID: {user.id})")
-        raise UserInactiveException(user_id=user.id)
+        Raises:
+            InvalidCredentialsException: If credentials are invalid
+            UserInactiveException: If user is inactive
+        """
+        # Get user by email
+        user = await User.get_by_email(self.db, data.email)
 
-    logger.info(f"User logged in: {user.email} (ID: {user.id})")
+        # Check if user exists and password is correct
+        if not user or not user.check_password(data.password):
+            logger.warning(f"Failed login attempt for email: {data.email}")
+            raise InvalidCredentialsException()
 
-    # Generate access token
-    access_token = create_access_token(subject=user.id)
+        # Check if user is active
+        if not user.is_active:
+            logger.warning(f"Inactive user login attempt: {user.email} (ID: {user.id})")
+            raise UserInactiveException(user_id=user.id)
 
-    return access_token
+        logger.info(f"User logged in: {user.email} (ID: {user.id})")
 
+        # Generate access token
+        access_token = create_access_token(subject=user.id)
 
-async def get_user_from_token(db: AsyncSession, user_id: uuid.UUID) -> User:
-    """Get user from database by user_id (from token).
+        return access_token
 
-    Args:
-        db: Database session
-        user_id: User ID from token
+    async def get_user_by_id(self, user_id: uuid.UUID) -> User:
+        """Get user by ID.
 
-    Returns:
-        User object
+        Args:
+            user_id: User ID
 
-    Raises:
-        UserNotFoundException: If user not found
-        UserInactiveException: If user is inactive
-    """
-    from src.users.service import get_user_by_id
+        Returns:
+            User object
 
-    user = await get_user_by_id(db, user_id)
+        Raises:
+            UserNotFoundException: If user not found
+        """
+        user = await User.get_by_id(self.db, user_id)
 
-    # Check if user is active
-    if not user.is_active:
-        raise UserInactiveException(user_id=user.id)
+        if not user:
+            logger.warning(f"User not found: {user_id}")
+            raise UserNotFoundException(user_id=user_id)
 
-    return user
+        return user

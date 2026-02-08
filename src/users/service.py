@@ -1,93 +1,121 @@
 import uuid
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.logger import get_logger
 from src.users.exceptions import UserAlreadyExistsException, UserNotFoundException
 from src.users.models import User
+from src.users.schemas import UserCreateInternal
 
 logger = get_logger(__name__)
 
 
-async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User:
-    """Get a user by ID.
+class UserService:
+    """Service for user management operations."""
 
-    Args:
-        db: Database session
-        user_id: User ID
+    def __init__(self, db: AsyncSession):
+        """Initialize UserService with database session.
 
-    Returns:
-        User object
+        Args:
+            db: Database session
+        """
+        self.db = db
 
-    Raises:
-        UserNotFoundException: If user not found
-    """
-    user = await db.get(User, user_id)
-    if not user:
-        logger.warning(f"User not found: {user_id}")
-        raise UserNotFoundException(user_id=user_id)
-    return user
+    async def get_user_by_id(self, user_id: uuid.UUID) -> User:
+        """Get a user by ID.
 
+        Args:
+            user_id: User ID
 
-async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    """Get a user by email.
+        Returns:
+            User object
 
-    Args:
-        db: Database session
-        email: User email
+        Raises:
+            UserNotFoundException: If user not found
+        """
+        user = await User.get_by_id(self.db, user_id)
+        if not user:
+            logger.warning(f"User not found: {user_id}")
+            raise UserNotFoundException(user_id=user_id)
+        return user
 
-    Returns:
-        User object if found, None otherwise
-    """
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-    return user
+    async def get_user_by_email(self, email: str) -> User | None:
+        """Get a user by email.
 
+        Args:
+            email: User email
 
-async def create_user(
-    db: AsyncSession,
-    email: str,
-    hashed_password: str,
-    full_name: str,
-    is_active: bool = True,
-    is_superuser: bool = False,
-) -> User:
-    """Create a new user.
+        Returns:
+            User object if found, None otherwise
+        """
+        return await User.get_by_email(self.db, email)
 
-    Args:
-        db: Database session
-        email: User email
-        hashed_password: Hashed password
-        full_name: User full name
-        is_active: User active status (default: True)
-        is_superuser: User superuser status (default: False)
+    async def create_user(self, data: UserCreateInternal) -> User:
+        """Create a new user.
 
-    Returns:
-        Created user object
+        Args:
+            data: User creation data
 
-    Raises:
-        UserAlreadyExistsException: If user with email already exists
-    """
-    # Check if user already exists
-    existing_user = await get_user_by_email(db, email)
-    if existing_user:
-        logger.warning(f"Attempt to create duplicate user: {email}")
-        raise UserAlreadyExistsException(email=email)
+        Returns:
+            Created user object
 
-    # Create new user
-    user = User(
-        email=email,
-        hashed_password=hashed_password,
-        full_name=full_name,
-        is_active=is_active,
-        is_superuser=is_superuser,
-    )
+        Raises:
+            UserAlreadyExistsException: If user with email already exists
+        """
+        # Check if user already exists
+        if await User.exists(self.db, data.email):
+            logger.warning(f"Attempt to create duplicate user: {data.email}")
+            raise UserAlreadyExistsException(email=data.email)
 
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+        # Create new user
+        user = await User.create(db=self.db, data=data)
 
-    logger.info(f"User created: {email} (ID: {user.id}, superuser: {is_superuser})")
+        logger.info(f"User created: {data.email} (ID: {user.id}, superuser: {data.is_superuser})")
 
-    return user
+        return user
+
+    async def activate_user(self, user_id: uuid.UUID) -> User:
+        """Activate a user account.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Updated user object
+
+        Raises:
+            UserNotFoundException: If user not found
+        """
+        user = await self.get_user_by_id(user_id)
+        user.activate()
+        await self.db.commit()
+        await self.db.refresh(user)
+        logger.info(f"User activated: {user.email} (ID: {user.id})")
+        return user
+
+    async def deactivate_user(self, user_id: uuid.UUID) -> User:
+        """Deactivate a user account.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Updated user object
+
+        Raises:
+            UserNotFoundException: If user not found
+        """
+        user = await self.get_user_by_id(user_id)
+        user.deactivate()
+        await self.db.commit()
+        await self.db.refresh(user)
+        logger.info(f"User deactivated: {user.email} (ID: {user.id})")
+        return user
+
+    async def get_active_users(self) -> list[User]:
+        """Get all active users.
+
+        Returns:
+            List of active users
+        """
+        return await User.get_active_users(self.db)
