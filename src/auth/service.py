@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.auth.config import REFRESH_TOKEN_EXPIRE
 from src.auth.exceptions import InvalidCredentialsException
 from src.auth.schemas import LoginRequest, RegisterRequest
 from src.auth.utils import create_access_token
@@ -51,7 +52,7 @@ class AuthService:
         logger.info(f"New user registered: {user.email} (ID: {user.id})")
 
         # Generate access token
-        access_token = create_access_token(subject=user.id)
+        access_token = create_access_token(subject=user.id, expires_delta=REFRESH_TOKEN_EXPIRE)
 
         return access_token
 
@@ -84,7 +85,7 @@ class AuthService:
         logger.info(f"User logged in: {user.email} (ID: {user.id})")
 
         # Generate access token
-        access_token = create_access_token(subject=user.id)
+        access_token = create_access_token(subject=user.id, expires_delta=REFRESH_TOKEN_EXPIRE)
 
         return access_token
 

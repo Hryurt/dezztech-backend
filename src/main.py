@@ -37,6 +37,9 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title=settings.PROJECT_NAME,
+    description=(
+        "Dezztech Backend API for managing incentive, grant, and public support application workflows."
+    ),
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -93,7 +96,8 @@ async def root():
     return JSONResponse(
         status_code=200,
         content={
-            "message": "Welcome to FastAPI Modular Postgres",
+            "message": "Welcome to Dezztech Backend",
+            "service": "dezztech-backend",
             "docs": "/docs",
             "health": "/health",
         },

@@ -1,6 +1,6 @@
-# FastAPI Modular Postgres
+# Dezztech Backend
 
-Modern, production-ready FastAPI application with modular monolith architecture, PostgreSQL, and comprehensive developer tools.
+Dezztech Backend is a production-ready FastAPI backend for digitizing government incentive, grant, and support consulting operations. It enables companies and consultants to manage applications in one platform with speed, consistency, and traceability.
 
 ## 🏗️ Architecture
 
@@ -56,7 +56,7 @@ src/
 ## 📁 Project Structure
 
 ```
-fastapi-modular-postgres/
+dezztech-backend/
 ├── alembic/                    # Database migrations
 │   ├── versions/               # Migration files
 │   └── env.py                  # Alembic environment configuration
@@ -109,7 +109,7 @@ fastapi-modular-postgres/
 
 ```bash
 git clone <repository-url>
-cd fastapi-modular-postgres
+cd dezztech-backend
 ```
 
 ### 2. Environment Configuration
@@ -124,10 +124,10 @@ Edit `.env` with your configuration:
 
 ```env
 # Database (Docker)
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@db_dev:5432/fastapi_db
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/dezztech_backend
 
 # Database for Alembic migrations (Host)
-ALEMBIC_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_db
+ALEMBIC_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dezztech_backend
 
 # Environment
 ENVIRONMENT=development
@@ -136,13 +136,14 @@ ENVIRONMENT=development
 SECRET_KEY=your-secret-key-change-this-in-production
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
 
 # API
 API_V1_PREFIX=/api/v1
-PROJECT_NAME=FastAPI Modular Postgres
+PROJECT_NAME=Dezztech Backend
 
-# CORS (comma-separated)
-BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+# CORS (JSON array)
+BACKEND_CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]
 ```
 
 ### 3. Run with Docker (Recommended)
@@ -152,7 +153,7 @@ BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 docker compose -f docker-compose.dev.yaml up -d
 
 # View logs
-docker compose -f docker-compose.dev.yaml logs -f app_dev
+docker compose -f docker-compose.dev.yaml logs -f app
 
 # Stop services
 docker compose -f docker-compose.dev.yaml down
@@ -469,4 +470,3 @@ For issues and questions, please open an issue on GitHub.
 ---
 
 **Built with ❤️ using FastAPI and modern Python tools**
-

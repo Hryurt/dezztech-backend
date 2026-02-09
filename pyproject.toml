@@ -1,7 +1,7 @@
 [project]
-name = "fastapi-modular-postgres"
+name = "dezztech-backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Backend API for managing incentive, grant, and support application workflows."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
