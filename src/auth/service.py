@@ -9,7 +9,7 @@ from src.auth.utils import create_access_token
 from src.logger import get_logger
 from src.users.exceptions import UserInactiveException, UserNotFoundException
 from src.users.models import User
-from src.users.schemas import UserCreateInternal
+from src.users.schemas import UserCreateData
 
 logger = get_logger(__name__)
 
@@ -38,7 +38,7 @@ class AuthService:
             UserAlreadyExistsException: If user with email already exists
         """
         # Create user data with default flags
-        user_data = UserCreateInternal(
+        user_data = UserCreateData(
             email=data.email,
             password=data.password,
             full_name=data.full_name,

@@ -19,9 +19,9 @@ class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=100)
 
 
-# Schema for internal user creation (with additional fields)
-class UserCreateInternal(UserCreate):
-    """Schema for internal user creation with system flags."""
+# Schema for internal user creation data (with additional fields)
+class UserCreateData(UserCreate):
+    """Schema for user creation data with system flags."""
 
     is_active: bool = True
     is_superuser: bool = False

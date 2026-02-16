@@ -10,7 +10,7 @@ from src.database import Base
 from src.models import TimestampMixin
 
 if TYPE_CHECKING:
-    from src.users.schemas import UserCreateInternal
+    from src.users.schemas import UserCreateData
 
 
 class User(Base, TimestampMixin):
@@ -129,7 +129,7 @@ class User(Base, TimestampMixin):
         return user is not None
 
     @classmethod
-    async def create(cls, db: AsyncSession, data: "UserCreateInternal") -> "User":
+    async def create(cls, db: AsyncSession, data: "UserCreateData") -> "User":
         """Create a new user.
 
         Args:

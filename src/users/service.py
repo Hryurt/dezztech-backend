@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.logger import get_logger
 from src.users.exceptions import UserAlreadyExistsException, UserNotFoundException
 from src.users.models import User
-from src.users.schemas import UserCreateInternal
+from src.users.schemas import UserCreateData
 
 logger = get_logger(__name__)
 
@@ -50,7 +50,7 @@ class UserService:
         """
         return await User.get_by_email(self.db, email)
 
-    async def create_user(self, data: UserCreateInternal) -> User:
+    async def create_user(self, data: UserCreateData) -> User:
         """Create a new user.
 
         Args:
