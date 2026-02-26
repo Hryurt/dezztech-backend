@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.auth.router import router as auth_router
+from src.users.router import router as users_router
 from src.config import settings
 from src.exceptions import (
     AppException,
@@ -105,7 +106,5 @@ async def root():
 
 
 # Include routers
-# from src.users.router import router as users_router
-
 app.include_router(auth_router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
-# app.include_router(users_router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])
+app.include_router(users_router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])

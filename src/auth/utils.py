@@ -18,6 +18,26 @@ from src.config import settings
 pwd_context = CryptContext(schemes=PWD_SCHEMES, deprecated=PWD_DEPRECATED)
 
 
+def validate_password_strength(password: str) -> None:
+    """Validate password meets complexity requirements.
+
+    Delegates to core password policy. Raises WeakPasswordException for domain layer compatibility.
+
+    Args:
+        password: Plain text password to validate
+
+    Raises:
+        WeakPasswordException: If password does not meet complexity requirements
+    """
+    from src.auth.exceptions import WeakPasswordException
+    from src.core.security.password_policy import validate_password_strength as _validate
+
+    try:
+        _validate(password)
+    except ValueError as e:
+        raise WeakPasswordException() from e
+
+
 # ==================== Password Hashing ====================
 
 
