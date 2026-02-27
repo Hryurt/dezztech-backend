@@ -25,7 +25,7 @@ from src.auth.schemas import (
     RegisterStartResponse,
     TokenResponse,
 )
-from src.auth.utils import create_access_token
+from src.auth.utils import create_access_token, log_sensitive_debug
 from src.logger import get_logger
 from src.users.exceptions import (
     UserInactiveException,
@@ -67,7 +67,7 @@ class AuthService:
             attempts_count=0,
         )
         self.db.add(code)
-        logger.info(f"Email OTP for {user.email}: {code.code}")
+        log_sensitive_debug(f"Email OTP for {user.email}: {code.code}")
 
     async def create_email_change_otp(self, user: User) -> None:
         """Create email verification OTP for email change flow. Public wrapper for _create_and_log_otp."""
@@ -118,7 +118,7 @@ class AuthService:
         await self.db.commit()
         await self.db.refresh(reset_token)
 
-        logger.info(f"Password reset token for {user.email}: {raw_token}")
+        log_sensitive_debug(f"Password reset token for {user.email}: {raw_token}")
 
     async def reset_password(self, token: str, new_password: str) -> None:
         """Reset user password using a valid reset token.

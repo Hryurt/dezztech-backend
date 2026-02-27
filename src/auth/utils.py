@@ -13,9 +13,26 @@ from src.auth.constants import (
     TOKEN_TYPE_ACCESS,
 )
 from src.config import settings
+from src.logger import get_logger
 
 # Password hashing context
 pwd_context = CryptContext(schemes=PWD_SCHEMES, deprecated=PWD_DEPRECATED)
+
+# Logger for sensitive debug messages
+_logger = get_logger(__name__)
+
+
+def log_sensitive_debug(message: str) -> None:
+    """Log sensitive information only in development environment.
+
+    Use this for logging OTP codes, tokens, and other sensitive values
+    that should never appear in non-development logs.
+
+    Args:
+        message: The sensitive message to log
+    """
+    if settings.ENVIRONMENT == "development":
+        _logger.debug(message)
 
 
 def validate_password_strength(password: str) -> None:
