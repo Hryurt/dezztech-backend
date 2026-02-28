@@ -154,7 +154,7 @@ class EmailVerificationCode(Base, TimestampMixin):
         """
         result = await db.execute(
             select(cls)
-            .where(cls.user_id == user_id, cls.is_used == False)  # noqa: E712
+            .where(cls.user_id == user_id, cls.is_used.is_(False))
             .order_by(desc(cls.created_at))
             .limit(1)
         )

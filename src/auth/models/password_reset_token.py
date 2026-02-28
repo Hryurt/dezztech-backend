@@ -80,7 +80,7 @@ class PasswordResetToken(Base, TimestampMixin):
         result = await db.execute(
             select(cls).where(
                 cls.user_id == user_id,
-                cls.is_used == False,  # noqa: E712
+                cls.is_used.is_(False),
             )
         )
         for token in result.scalars().all():
@@ -102,7 +102,7 @@ class PasswordResetToken(Base, TimestampMixin):
         result = await db.execute(
             select(cls).where(
                 cls.user_id == user_id,
-                cls.is_used == False,  # noqa: E712
+                cls.is_used.is_(False),
             )
         )
         return list(result.scalars().all())
@@ -123,7 +123,7 @@ class PasswordResetToken(Base, TimestampMixin):
         result = await db.execute(
             select(cls).where(
                 cls.token_hash == token_hash,
-                cls.is_used == False,  # noqa: E712
+                cls.is_used.is_(False),
             )
         )
         return result.scalar_one_or_none()
