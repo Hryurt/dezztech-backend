@@ -3,7 +3,6 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.exceptions import (
@@ -53,14 +52,12 @@ class AuthService:
         expires_at = datetime.now(timezone.utc) + timedelta(
             minutes=EmailVerificationCode.OTP_VALIDITY_MINUTES
         )
-        code = EmailVerificationCode(
-            user_id=user.id,
-            code=generate_otp_code(),
-            expires_at=expires_at,
-            is_used=False,
-            attempts_count=0,
+        code = await EmailVerificationCode.create_for_user(
+            self.db,
+            user.id,
+            generate_otp_code(),
+            expires_at,
         )
-        self.db.add(code)
         log_sensitive_debug(f"Email OTP for {user.email}: {code.code}")
 
     async def create_email_change_otp(self, user: User) -> None:
@@ -82,16 +79,7 @@ class AuthService:
             return
 
         # Invalidate all existing active reset tokens for this user
-        result = await self.db.execute(
-            select(PasswordResetToken).where(
-                PasswordResetToken.user_id == user.id,
-                PasswordResetToken.is_used == False,  # noqa: E712
-            )
-        )
-        existing_tokens = result.scalars().all()
-
-        for token_obj in existing_tokens:
-            token_obj.is_used = True
+        await PasswordResetToken.invalidate_active_tokens(self.db, user.id)
 
         # Generate new reset token
         raw_token = secrets.token_urlsafe(32)
@@ -100,13 +88,12 @@ class AuthService:
             minutes=PasswordResetToken.RESET_TOKEN_VALIDITY_MINUTES
         )
 
-        reset_token = PasswordResetToken(
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-            is_used=False,
+        reset_token = await PasswordResetToken.create_for_user(
+            self.db,
+            user.id,
+            token_hash,
+            expires_at,
         )
-        self.db.add(reset_token)
 
         # Single commit for invalidation + new token creation
         await self.db.commit()
@@ -128,19 +115,15 @@ class AuthService:
         """
         token_hash = hashlib.sha256(token.encode()).hexdigest()
 
-        result = await self.db.execute(
-            select(PasswordResetToken).where(
-                PasswordResetToken.token_hash == token_hash,
-                PasswordResetToken.is_used == False,  # noqa: E712
-            )
+        reset_token = await PasswordResetToken.get_active_by_token_hash(
+            self.db, token_hash
         )
-        reset_token = result.scalar_one_or_none()
 
         if reset_token is None:
             raise OTPInvalidException()
 
         if datetime.now(timezone.utc) > reset_token.expires_at:
-            reset_token.is_used = True
+            reset_token.mark_as_used()
             await self.db.commit()
             raise OTPExpiredException()
 
@@ -154,7 +137,7 @@ class AuthService:
             raise PasswordReuseNotAllowedException()
 
         user.set_password(new_password)
-        reset_token.is_used = True
+        reset_token.mark_as_used()
 
         await self.db.commit()
 

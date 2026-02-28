@@ -103,6 +103,39 @@ class EmailVerificationCode(Base, TimestampMixin):
         self.mark_as_used()
 
     # ──────────────────────────────────────────────
+    # Factory Methods (Class Methods)
+    # ──────────────────────────────────────────────
+
+    @classmethod
+    async def create_for_user(
+        cls,
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        code: str,
+        expires_at: datetime,
+    ) -> "EmailVerificationCode":
+        """Create a new email verification code for a user.
+
+        Args:
+            db: Database session
+            user_id: User ID
+            code: OTP code string
+            expires_at: Code expiration datetime
+
+        Returns:
+            Created EmailVerificationCode (not committed)
+        """
+        verification_code = cls(
+            user_id=user_id,
+            code=code,
+            expires_at=expires_at,
+            is_used=False,
+            attempts_count=0,
+        )
+        db.add(verification_code)
+        return verification_code
+
+    # ──────────────────────────────────────────────
     # Query Methods (Class Methods)
     # ──────────────────────────────────────────────
 
