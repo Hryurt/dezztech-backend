@@ -1,5 +1,4 @@
 import hashlib
-import random
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -25,7 +24,7 @@ from src.auth.schemas import (
     RegisterStartResponse,
     TokenResponse,
 )
-from src.auth.utils import create_access_token, log_sensitive_debug
+from src.auth.utils import create_access_token, generate_otp_code, log_sensitive_debug
 from src.logger import get_logger
 from src.users.exceptions import (
     UserInactiveException,
@@ -36,11 +35,6 @@ from src.users.schemas import UserCreateInternal
 from src.users.service import UserService
 
 logger = get_logger(__name__)
-
-
-def _generate_otp_code() -> str:
-    """Generate a 4-digit OTP code preserving leading zeros."""
-    return f"{random.randint(0, 9999):04d}"
 
 
 class AuthService:
@@ -61,7 +55,7 @@ class AuthService:
         )
         code = EmailVerificationCode(
             user_id=user.id,
-            code=_generate_otp_code(),
+            code=generate_otp_code(),
             expires_at=expires_at,
             is_used=False,
             attempts_count=0,

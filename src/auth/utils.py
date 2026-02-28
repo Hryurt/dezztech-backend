@@ -1,3 +1,4 @@
+import random
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -33,6 +34,17 @@ def log_sensitive_debug(message: str) -> None:
     """
     if settings.ENVIRONMENT == "development":
         _logger.debug(message)
+
+
+def generate_otp_code() -> str:
+    """Generate a 4-digit OTP code.
+
+    Preserves leading zeros in the output.
+
+    Returns:
+        4-digit OTP code as string
+    """
+    return f"{random.randint(0, 9999):04d}"
 
 
 def validate_password_strength(password: str) -> None:
