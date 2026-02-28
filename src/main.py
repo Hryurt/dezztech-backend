@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.auth.router import router as auth_router
+from src.users.router import router as users_router
 from src.config import settings
 from src.exceptions import (
     AppException,
@@ -37,6 +38,9 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title=settings.PROJECT_NAME,
+    description=(
+        "Dezztech Backend API for managing incentive, grant, and public support application workflows."
+    ),
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -93,7 +97,8 @@ async def root():
     return JSONResponse(
         status_code=200,
         content={
-            "message": "Welcome to FastAPI Modular Postgres",
+            "message": "Welcome to Dezztech Backend",
+            "service": "dezztech-backend",
             "docs": "/docs",
             "health": "/health",
         },
@@ -101,7 +106,5 @@ async def root():
 
 
 # Include routers
-# from src.users.router import router as users_router
-
 app.include_router(auth_router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
-# app.include_router(users_router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])
+app.include_router(users_router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])

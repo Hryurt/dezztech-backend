@@ -3,7 +3,7 @@ alwaysApply: true
 ---
 It is a FastAPI project that is structured DDD-like modular monolith architecture with domain-driven design principles. Here is the project structure. You have to follow this structure along the project.
 
-fastapi-modular-postgres
+dezztech-backend
 ├── alembic/
 ├── src
 │   ├── auth

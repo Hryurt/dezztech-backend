@@ -1,4 +1,4 @@
-from enum import strEnum
+from enum import StrEnum
 
 
 # HTTP Status Messages
@@ -26,7 +26,7 @@ PHONE_REGEX = r"^\+?1?\d{9,15}$"
 
 
 # Environment Types
-class Environment(strEnum):
+class Environment(StrEnum):
     DEVELOPMENT = "development"
     STAGING = "staging"
     PRODUCTION = "production"

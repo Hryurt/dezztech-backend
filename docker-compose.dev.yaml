@@ -2,12 +2,12 @@ services:
   # PostgreSQL Database
   db:
     image: postgres:17-alpine
-    container_name: fastapi_postgres_db_dev
+    container_name: dezztech_backend_postgres_db_dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-fastapi_db}
+      POSTGRES_DB: ${POSTGRES_DB:-dezztech_backend}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
@@ -19,14 +19,14 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - fastapi_network_dev
+      - dezztech_backend_network_dev
 
   # FastAPI Application (Development)
   app:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: fastapi_app_dev
+    container_name: dezztech_backend_app_dev
     restart: unless-stopped
     env_file:
       - .env
@@ -45,13 +45,12 @@ services:
         condition: service_healthy
     command: uv run uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
-      - fastapi_network_dev
+      - dezztech_backend_network_dev
 
 volumes:
   postgres_data_dev:
     driver: local
 
 networks:
-  fastapi_network_dev:
+  dezztech_backend_network_dev:
     driver: bridge
-

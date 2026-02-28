@@ -1,3 +1,4 @@
+import random
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -13,9 +14,57 @@ from src.auth.constants import (
     TOKEN_TYPE_ACCESS,
 )
 from src.config import settings
+from src.logger import get_logger
 
 # Password hashing context
 pwd_context = CryptContext(schemes=PWD_SCHEMES, deprecated=PWD_DEPRECATED)
+
+# Logger for sensitive debug messages
+_logger = get_logger(__name__)
+
+
+def log_sensitive_debug(message: str) -> None:
+    """Log sensitive information only in development environment.
+
+    Use this for logging OTP codes, tokens, and other sensitive values
+    that should never appear in non-development logs.
+
+    Args:
+        message: The sensitive message to log
+    """
+    if settings.ENVIRONMENT == "development":
+        _logger.debug(message)
+
+
+def generate_otp_code() -> str:
+    """Generate a 4-digit OTP code.
+
+    Preserves leading zeros in the output.
+
+    Returns:
+        4-digit OTP code as string
+    """
+    return f"{random.randint(0, 9999):04d}"
+
+
+def validate_password_strength(password: str) -> None:
+    """Validate password meets complexity requirements.
+
+    Delegates to core password policy. Raises WeakPasswordException for domain layer compatibility.
+
+    Args:
+        password: Plain text password to validate
+
+    Raises:
+        WeakPasswordException: If password does not meet complexity requirements
+    """
+    from src.auth.exceptions import WeakPasswordException
+    from src.core.security.password_policy import validate_password_strength as _validate
+
+    try:
+        _validate(password)
+    except ValueError as e:
+        raise WeakPasswordException() from e
 
 
 # ==================== Password Hashing ====================

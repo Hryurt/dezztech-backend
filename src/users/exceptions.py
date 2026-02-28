@@ -1,6 +1,11 @@
 import uuid
 
-from src.exceptions import ConflictException, NotFoundException
+from src.exceptions import (
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    NotFoundException,
+)
 
 
 class UserNotFoundException(NotFoundException):
@@ -35,12 +40,23 @@ class UserAlreadyExistsException(ConflictException):
         )
 
 
-class UserInactiveException(ConflictException):
-    """Exception raised when trying to perform action on inactive user."""
+class LastSuperAdminException(BadRequestException):
+    """Exception raised when trying to deactivate the last super admin."""
 
-    def __init__(self, user_id: uuid.UUID):
+    def __init__(self):
         super().__init__(
-            message=f"User with id {user_id} is inactive",
+            message="Cannot deactivate the last super admin",
+            error_code="LAST_SUPER_ADMIN",
+            details={},
+        )
+
+
+class UserInactiveException(ForbiddenException):
+    """Exception raised when trying to perform action on inactive (deactivated) user."""
+
+    def __init__(self, user_id: uuid.UUID | None = None):
+        super().__init__(
+            message="User account is deactivated",
             error_code="USER_INACTIVE",
-            details={"user_id": str(user_id)},
+            details={"user_id": str(user_id)} if user_id else {},
         )
