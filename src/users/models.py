@@ -12,6 +12,7 @@ from src.database import Base
 from src.models import TimestampMixin
 
 if TYPE_CHECKING:
+    from src.companies.models import UserCompany
     from src.users.schemas import UserCreateInternal
 
 
@@ -59,9 +60,19 @@ class User(Base, TimestampMixin):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    companies: Mapped[list["UserCompany"]] = relationship(
+        "UserCompany",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email})>"
+
+    @property
+    def full_name(self) -> str | None:
+        """Full name from first_name and last_name."""
+        return " ".join(filter(None, [self.first_name, self.last_name])) or None
 
     # ──────────────────────────────────────────────
     # Domain Methods (Instance Methods)

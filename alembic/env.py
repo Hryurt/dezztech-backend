@@ -14,6 +14,7 @@ from src.config import settings
 from src.database import Base
 from src.users import models as users_models  # noqa: F401
 from src.auth import models as auth_models  # noqa: F401
+from src.companies import models as companies_models  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
