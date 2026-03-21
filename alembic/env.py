@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 # Import the config to get DATABASE_URL
-from src.config import settings
+from src.core.config import settings
 
 # Import Base and all models for autogenerate support
-from src.database import Base
-from src.users import models as users_models  # noqa: F401
-from src.auth import models as auth_models  # noqa: F401
-from src.companies import models as companies_models  # noqa: F401
+from src.core.database import Base
+from src.domains.users import models as users_models  # noqa: F401
+from src.domains.auth import models as auth_models  # noqa: F401
+from src.domains.companies import models as companies_models  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
