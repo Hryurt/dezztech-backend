@@ -279,6 +279,28 @@ class CompanyService:
         )
         return company
 
+    async def delete_company(self, company_id: uuid.UUID) -> None:
+        """Hard delete a company. Only callable by owner.
+
+        Args:
+            company_id: Company ID
+
+        Raises:
+            CompanyNotFoundException: If company not found
+        """
+        company = await self.repo.get_by_id(company_id)
+        if not company:
+            raise CompanyNotFoundException(company_id=company_id)
+
+        company_name = company.name
+        await self.repo.delete(company)
+        await self.db.commit()
+
+        logger.info(
+            "Company deleted",
+            extra={"company_id": str(company_id), "company_name": company_name},
+        )
+
     async def list_my_companies(
         self,
         user: User,

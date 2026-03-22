@@ -135,7 +135,7 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 - [x] Consultant rolu sadece Admin sistem rolune sahip kullanicilara atanabilir
 - [x] Email servisi (SendGrid, development'ta loglama)
 - [x] CompanyInvitation modeli
-- [ ] Firma silme (hard delete — PRD 5.2.4, sadece Owner)
+- [x] Firma silme (hard delete — PRD 5.2.4, sadece Owner)
 - [ ] Abonelik bazli firma olusturma limiti (PRD 5.2.7)
 - [ ] Abonelik bazli uyelik limiti (PRD 5.2.7)
 - [ ] CompanyBrand CRUD endpoint'leri
@@ -166,6 +166,7 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 | PATCH | /api/v1/companies/{id}/sectors/{sid} | Tamamlandi |
 | DELETE | /api/v1/companies/{id}/sectors/{sid} | Tamamlandi |
 | POST | /api/v1/companies/{id}/invite-user | Tamamlandi |
+| DELETE | /api/v1/companies/{id} | Tamamlandi |
 | POST | /api/v1/companies/invitations/accept | Tamamlandi |
 
 ---

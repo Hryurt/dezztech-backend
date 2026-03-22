@@ -104,6 +104,82 @@ class TestUpdateCompany:
         assert resp.json()["employee_count"] == 50
 
 
+class TestDeleteCompany:
+    """DELETE /companies/{id}"""
+
+    async def test_owner_can_delete(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        headers = auth_headers(registered_user["token"])
+        create_resp = await client.post(
+            f"{API}", headers=headers, json=_company_payload(mersis_number="DEL00001")
+        )
+        company_id = create_resp.json()["id"]
+
+        resp = await client.delete(f"{API}/{company_id}", headers=headers)
+        assert resp.status_code == 204
+
+        # Verify it's gone
+        get_resp = await client.get(f"{API}/{company_id}", headers=headers)
+        assert get_resp.status_code == 403
+
+    async def test_non_owner_cannot_delete(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        """Admin (non-owner) should not be able to delete."""
+        headers = auth_headers(registered_user["token"])
+        create_resp = await client.post(
+            f"{API}", headers=headers, json=_company_payload(mersis_number="DEL00002")
+        )
+        company_id = create_resp.json()["id"]
+
+        # Invite a second user as admin
+        from tests.conftest import _create_verified_user
+
+        user2 = await _create_verified_user(
+            client, email="admin2@dezztech.com", password="Admin2Pass1!"
+        )
+        await client.post(
+            f"{API}/{company_id}/invite-user",
+            headers=headers,
+            json={"email": user2["email"], "role": "admin"},
+        )
+
+        # Accept invitation
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+        from tests.conftest import TEST_DATABASE_URL
+        from src.domains.companies.models import CompanyInvitation
+
+        engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as session:
+            result = await session.execute(
+                select(CompanyInvitation).where(
+                    CompanyInvitation.email == user2["email"],
+                    CompanyInvitation.is_accepted.is_(False),
+                )
+            )
+            inv = result.scalar_one()
+            token = inv.token
+        await engine.dispose()
+
+        await client.post(
+            f"{API}/invitations/accept",
+            json={"token": token},
+        )
+
+        # Admin tries to delete — should fail
+        headers2 = auth_headers(user2["token"])
+        resp = await client.delete(f"{API}/{company_id}", headers=headers2)
+        assert resp.status_code == 403
+
+    async def test_unauthenticated(self, client: AsyncClient):
+        resp = await client.delete(f"{API}/{uuid.uuid4()}")
+        assert resp.status_code == 401
+
+
 class TestDeactivateActivateCompany:
     """PATCH /companies/{id}/deactivate and /activate"""
 

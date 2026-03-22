@@ -8,6 +8,7 @@ from src.domains.companies.dependencies import (
     get_company_service,
     require_company_admin_or_owner,
     require_company_member,
+    require_company_owner,
 )
 from src.domains.companies.models import UserCompany
 from src.domains.companies.schemas import (
@@ -136,6 +137,19 @@ async def activate_company(
         company_id, user_id=user_id
     )
     return CompanyResponse.model_validate(company)
+
+
+@router.delete(
+    "/{company_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_company(
+    company_id: uuid.UUID,
+    user_company: UserCompany = Depends(require_company_owner),
+    company_service: CompanyService = Depends(get_company_service),
+) -> None:
+    """Hard delete a company. Only the owner can perform this action."""
+    await company_service.delete_company(company_id)
 
 
 @router.get(

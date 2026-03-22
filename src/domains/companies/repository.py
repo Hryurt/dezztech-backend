@@ -60,6 +60,10 @@ class CompanyRepository:
         )
         return result.scalar_one_or_none()
 
+    async def delete(self, company: Company) -> None:
+        """Hard delete a company (cascades to related records)."""
+        await self.db.delete(company)
+
     async def exists_by_mersis(self, mersis_number: str) -> bool:
         """Check if a company with the given MERSIS number exists."""
         return (

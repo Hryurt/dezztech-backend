@@ -112,6 +112,32 @@ async def require_company_admin_or_owner(
     return user_company
 
 
+async def require_company_owner(
+    company_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserCompany:
+    """Ensure the current user is the owner of the given company.
+
+    SUPER_ADMIN receives a synthetic UserCompany with owner-equivalent access.
+    """
+    user_company = await _get_active_membership(
+        company_id,
+        current_user,
+        db,
+        not_member_detail="You do not have permission to delete this company.",
+    )
+
+    role = user_company.role
+    if role is None or role.name != COMPANY_OWNER_ROLE:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the company owner can perform this action.",
+        )
+
+    return user_company
+
+
 def get_company_service(db: AsyncSession = Depends(get_db)) -> CompanyService:
     """Factory function for CompanyService.
 
