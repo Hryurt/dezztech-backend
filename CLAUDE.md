@@ -64,6 +64,12 @@ Her domain su dosyalari icerir:
   - Domain: `from src.domains.auth.service import AuthService`
 - **Turk dilinde iletisim:** Kullanici Turkce konusur, kod ve degisken isimleri Ingilizce.
 
+## Commit Kurallari
+
+Format: `<action>: <message>` (max 50 karakter)
+
+Action tipleri: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`
+
 ## Komutlar
 
 ```bash

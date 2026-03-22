@@ -9,8 +9,8 @@
 
 | PRD Bolum | Konu | Durum |
 |-----------|------|-------|
-| 5.1.1 | Kayit (email + OTP) | Kismen — is emaili kisitlamasi ve OAuth yok |
-| 5.1.2 | Giris (email + sifre) | Tamamlandi — OAuth yok |
+| 5.1.1 | Kayit (email + OTP) | Tamamlandi — Outlook OAuth eksik |
+| 5.1.2 | Giris (email + sifre + Google) | Tamamlandi — Outlook OAuth eksik |
 | 5.1.3 | Parola yonetimi | Tamamlandi |
 | 5.1.4 | Profil yonetimi | Tamamlandi |
 | 5.2 | Firma yonetimi | Kismen — davet placeholder, silme yok, abonelik limiti yok |
@@ -65,17 +65,21 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 ### Yapilan
 - [x] Email + sifre ile kayit (register/start → register → verify-email)
 - [x] OTP ile email dogrulama (4 haneli, 10dk gecerlilik, max 5 deneme, 60sn cooldown)
+- [x] Is emaili kisitlamasi (blocklist: gmail, hotmail, yahoo, yandex, icloud vb.)
 - [x] Email + sifre ile giris → JWT access token (HS256)
-- [x] Sifre sifirlama (forgot-password → token → reset-password)
+- [x] Google OAuth giris/kayit (POST /auth/google — id_token dogrulama, otomatik kayit)
+- [x] OAuth kullanicilar icin sifreli/sifresiz hesap destegi (password_hash nullable)
+- [x] Sifre olusturma (POST /users/me/set-password — OAuth hesaplar icin)
 - [x] Sifre degistirme (mevcut sifre dogrulama + yeni sifre validasyon)
+- [x] Sifresiz kullanici sifre ile giris yapamaz (PASSWORD_NOT_SET hatasi)
+- [x] Sifre sifirlama (forgot-password → token → reset-password)
 - [x] Profil goruntuleme ve guncelleme (first_name, last_name, phone_number)
 - [x] Email degistirme (OTP ile dogrulama)
 - [x] Hesap deaktivasyonu (soft delete)
 - [x] Rol tabanli erisim kontrolu (require_role, require_superuser)
+- [x] has_password alani UserMeResponse'a eklendi
 
 ### Yapilmadi (PRD gereksinimleri)
-- [ ] Is emaili kisitlamasi (genel email saglayicilari engellenmeli — PRD 5.1.1.1)
-- [ ] Google OAuth giris (PRD 5.1.1.3, 5.1.2.2)
 - [ ] Microsoft Outlook OAuth giris (PRD 5.1.1.3, 5.1.2.2)
 - [ ] Refresh token mekanizmasi
 
@@ -95,11 +99,13 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 | GET | /api/v1/auth/me | Tamamlandi |
 | POST | /api/v1/auth/forgot-password | Tamamlandi |
 | POST | /api/v1/auth/reset-password | Tamamlandi |
+| POST | /api/v1/auth/google | Tamamlandi |
 | GET | /api/v1/users/me | Tamamlandi |
 | PATCH | /api/v1/users/me | Tamamlandi |
 | PATCH | /api/v1/users/me/password | Tamamlandi |
 | POST | /api/v1/users/me/email-change-request | Tamamlandi |
 | POST | /api/v1/users/me/email-change-verify | Tamamlandi |
+| POST | /api/v1/users/me/set-password | Tamamlandi |
 | DELETE | /api/v1/users/me | Tamamlandi |
 
 ---
@@ -118,19 +124,26 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 - [x] SUPER_ADMIN tum sirketlere sentetik owner erisimi
 - [x] Sektor CRUD (NACE kodu company bazinda unique)
 - [x] IBAN normalizasyonu
+- [x] PRD 8.2 ortak firma alanlari tamamlandi (sgk_debt, tax_debt, financials, contact_email, activity_sectors JSON, exporter_unions JSON)
+- [x] CompanyBrand modeli (PRD 8.2 — tekrarlanabilir marka, yurt ici/disi tescil)
+- [x] CompanySectorProfile modeli (PRD 8.3 — sektore ozel alanlar, EAV pattern, form builder uyumlu field_key ile)
 
 ### Yapilmadi (PRD gereksinimleri)
 - [ ] Kullanici davet etme is mantigi (endpoint placeholder var — PRD 5.2.5)
 - [ ] Firma silme (hard delete — PRD 5.2.4, sadece Owner)
 - [ ] Abonelik bazli firma olusturma limiti (PRD 5.2.7)
 - [ ] Abonelik bazli uyelik limiti (PRD 5.2.7)
-- [ ] PRD 8.2-8.4'teki ek firma alanlari (SGK/vergi borcu, sektore ozel alanlar, markalaşma alanlari)
+- [ ] CompanyBrand CRUD endpoint'leri
+- [ ] CompanySectorProfile CRUD endpoint'leri
+- [ ] PRD 8.4 Markalaşma Programi ek firma alanlari (model mevcut, alanlar tanimlanmali)
 
 ### Modeller
-- Company — name, mersis_number, tax_number, tax_office, employee_count, is_active + profil/finans/iletisim alanlari
+- Company — PRD 8.2 tam: kimlik, finans (sgk/vergi borcu, ihracat gelirleri), aktivite (activity_sectors JSON, exporter_unions JSON), iletisim (contact_email eklendi)
 - CompanyRole — name, permissions (JSON), is_active (owner/admin/accountant/viewer)
 - UserCompany — user_id, company_id, role_id, is_active (many-to-many with role)
 - CompanySector — company_id, nace_code, nace_name, brand_name
+- CompanyBrand — **YENI** company_id, brand_name, has_domestic_registration, has_international_registration
+- CompanySectorProfile — **YENI** company_id, sector_type, field_key, value_text/numeric/bool/date/json (EAV, form builder uyumlu)
 
 ### Endpoint'ler
 | Method | Endpoint | Durum |
@@ -208,6 +221,7 @@ Henuz baslanmadi.
 ## Bilinen Eksikler / Teknik Borc
 
 - [ ] Companies domain migration dosyalari eksik (silinmis, yeniden olusturulmali)
+- [ ] password_hash nullable migration olusturulmali (OAuth desteği icin)
 - [ ] Email gonderimi entegrasyonu yok (OTP ve bildirimler sadece loglaniyor)
 - [ ] Test altyapisi yok
 - [ ] CI/CD pipeline yok

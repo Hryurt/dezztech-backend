@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
     Uuid,
@@ -42,40 +43,54 @@ class CompanyRole(Base):
 
 
 class Company(Base, TimestampMixin):
-    """Company entity for managing company information."""
+    """Company entity for managing company information.
+
+    Fields based on PRD 8.2 (EK-YBF common fields).
+    Sector-specific fields are stored in CompanySectorProfile.
+    """
 
     __tablename__ = "companies"
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True
     )
+    # ── Identity (PRD 8.2) ──
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     mersis_number: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     tax_number: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     tax_office: Mapped[str] = mapped_column(String(100), nullable=False)
-    employee_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
-    # Company profile fields
     foundation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    employee_count: Mapped[int] = mapped_column(Integer, nullable=False)
     headquarters_address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    # Financial
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+
+    # ── Financial (PRD 8.2) ──
     iban_try: Mapped[Optional[str]] = mapped_column(String(34), nullable=True)
-    # Activity
+    sgk_debt: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    tax_debt: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    service_export_last_year_usd: Mapped[Optional[int]] = mapped_column(
+        Numeric(precision=15, scale=2), nullable=True
+    )
+    foreign_income_last_year_usd: Mapped[Optional[int]] = mapped_column(
+        Numeric(precision=15, scale=2), nullable=True
+    )
+
+    # ── Activity (PRD 8.2) ──
     nace_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    activity_sector: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    exporter_union: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    activity_sectors: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    exporter_unions: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
     hib_member_no: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # Contact
+
+    # ── Contact (PRD 8.2) ──
     contact_full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     website: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     kep_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    # NOTE:
-    # This relationship represents memberships (UserCompany),
-    # not direct users. Each entry contains role information.
+    # ── Relationships ──
     users: Mapped[list["UserCompany"]] = relationship(
         "UserCompany",
         back_populates="company",
@@ -83,6 +98,18 @@ class Company(Base, TimestampMixin):
     )
     sectors: Mapped[list["CompanySector"]] = relationship(
         "CompanySector",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    brands: Mapped[list["CompanyBrand"]] = relationship(
+        "CompanyBrand",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    sector_profiles: Mapped[list["CompanySectorProfile"]] = relationship(
+        "CompanySectorProfile",
         back_populates="company",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -113,12 +140,17 @@ class Company(Base, TimestampMixin):
             "foundation_date",
             "headquarters_address",
             "iban_try",
+            "sgk_debt",
+            "tax_debt",
+            "service_export_last_year_usd",
+            "foreign_income_last_year_usd",
             "nace_code",
-            "activity_sector",
-            "exporter_union",
+            "activity_sectors",
+            "exporter_unions",
             "hib_member_no",
             "contact_full_name",
             "contact_phone",
+            "contact_email",
             "email",
             "phone",
             "website",
@@ -130,7 +162,7 @@ class Company(Base, TimestampMixin):
 
 
 class CompanySector(Base, TimestampMixin):
-    """Company sector sub-entity (many per Company)."""
+    """Company NACE sector sub-entity (many per Company)."""
 
     __tablename__ = "company_sectors"
     __table_args__ = (
@@ -165,11 +197,108 @@ class CompanySector(Base, TimestampMixin):
         self.brand_name = brand_name
 
 
+class CompanyBrand(Base, TimestampMixin):
+    """Registered brand/trademark for a company (PRD 8.2 — repeatable).
+
+    A company can have multiple registered brands.
+    Used in Branding Program (PRD 8.4) and product associations.
+    """
+
+    __tablename__ = "company_brands"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            "brand_name",
+            name="uq_company_brand_name",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    brand_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    has_domestic_registration: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    has_international_registration: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+
+    company: Mapped["Company"] = relationship(
+        "Company",
+        back_populates="brands",
+        lazy="selectin",
+    )
+
+
+class CompanySectorProfile(Base, TimestampMixin):
+    """Sector-specific company profile fields (PRD 8.3).
+
+    EAV-like pattern: each row is one field value for a company.
+    Designed for form builder integration — each field is individually
+    referenceable by field_key (PRD 5.4.3 "Firma Bazli Alan").
+
+    Exactly one value column should be populated per row.
+
+    Sector types: it, consulting, digital_mediation, education,
+    health_tourism, fintech, exhibition, congress, cultural_creative,
+    logistics, sports_tourism, technical_consultancy, conformity_assessment
+
+    Example field_keys per sector:
+      - it: it_sub_sector
+      - consulting: consulting_type, consulting_revenue_ratio
+      - health_tourism: institution_type, specialist_doctor_count, bed_count
+      - education: institution_type
+    """
+
+    __tablename__ = "company_sector_profiles"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            "field_key",
+            name="uq_company_sector_profile_field",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sector_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    field_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    value_text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    value_numeric: Mapped[Optional[int]] = mapped_column(
+        Numeric(precision=15, scale=2), nullable=True
+    )
+    value_bool: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    value_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    value_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    company: Mapped["Company"] = relationship(
+        "Company",
+        back_populates="sector_profiles",
+        lazy="selectin",
+    )
+
+
 class UserCompany(Base, TimestampMixin):
     """User-company association (many-to-many with role)."""
 
     __tablename__ = "users_companies"
-    __table_args__ = (UniqueConstraint("user_id", "company_id", name="uq_users_companies_user_company"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "company_id", name="uq_users_companies_user_company"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True
