@@ -75,16 +75,24 @@ Action tipleri: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`
 ## Komutlar
 
 ```bash
-# Uygulamayi calistir
-uvicorn src.main:app --reload
+# Paket yonetimi: uv kullan (pip degil)
+uv sync                            # dependency'leri kur
+uv add <paket>                     # yeni dependency ekle
+uv sync --group test               # test dependency'lerini kur
+
+# Uygulamayi calistir (Docker)
+docker compose -f docker-compose.dev.yaml up
 
 # Lint
 ruff check src/
 
-# Migration olustur
-alembic revision --autogenerate -m "description"
+# Test
+uv run pytest                      # tum testler
+uv run pytest tests/test_auth.py   # tek dosya
+uv run pytest -x                   # ilk hatada dur
 
-# Migration uygula
+# Migration
+alembic revision --autogenerate -m "description"
 alembic upgrade head
 
 # Import zinciri testi
