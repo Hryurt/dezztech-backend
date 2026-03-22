@@ -13,7 +13,7 @@
 | 5.1.2 | Giris (email + sifre + Google + Microsoft) | Tamamlandi |
 | 5.1.3 | Parola yonetimi | Tamamlandi |
 | 5.1.4 | Profil yonetimi | Tamamlandi |
-| 5.2 | Firma yonetimi | Kismen — davet placeholder, silme yok, abonelik limiti yok |
+| 5.2 | Firma yonetimi | Kismen — silme yok, abonelik limiti yok |
 | 5.3 | Urun yonetimi | Yapilmadi |
 | 5.4 | Tesvik ve destek yonetimi | Yapilmadi |
 | 5.5 | Basvuru yonetimi | Yapilmadi |
@@ -130,7 +130,11 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 - [x] CompanySectorProfile modeli (PRD 8.3 — sektore ozel alanlar, EAV pattern, form builder uyumlu field_key ile)
 
 ### Yapilmadi (PRD gereksinimleri)
-- [ ] Kullanici davet etme is mantigi (endpoint placeholder var — PRD 5.2.5)
+- [x] Kullanici davet etme (PRD 5.2.5 — invite + accept, email ile, 7 gun token suresi)
+- [x] Kayitli olmayan kullanici davet kabul ederek kayit olabilir
+- [x] Consultant rolu sadece Admin sistem rolune sahip kullanicilara atanabilir
+- [x] Email servisi (SendGrid, development'ta loglama)
+- [x] CompanyInvitation modeli
 - [ ] Firma silme (hard delete — PRD 5.2.4, sadece Owner)
 - [ ] Abonelik bazli firma olusturma limiti (PRD 5.2.7)
 - [ ] Abonelik bazli uyelik limiti (PRD 5.2.7)
@@ -145,6 +149,7 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 - CompanySector — company_id, nace_code, nace_name, brand_name
 - CompanyBrand — **YENI** company_id, brand_name, has_domestic_registration, has_international_registration
 - CompanySectorProfile — **YENI** company_id, sector_type, field_key, value_text/numeric/bool/date/json (EAV, form builder uyumlu)
+- CompanyInvitation — **YENI** company_id, email, role_id, invited_by, token, expires_at, is_accepted
 
 ### Endpoint'ler
 | Method | Endpoint | Durum |
@@ -160,7 +165,8 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 | POST | /api/v1/companies/{id}/sectors | Tamamlandi |
 | PATCH | /api/v1/companies/{id}/sectors/{sid} | Tamamlandi |
 | DELETE | /api/v1/companies/{id}/sectors/{sid} | Tamamlandi |
-| POST | /api/v1/companies/{id}/invite-user | Placeholder |
+| POST | /api/v1/companies/{id}/invite-user | Tamamlandi |
+| POST | /api/v1/companies/invitations/accept | Tamamlandi |
 
 ---
 
