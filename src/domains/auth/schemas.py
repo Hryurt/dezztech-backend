@@ -2,7 +2,14 @@ import uuid
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from src.core.security.email_policy import validate_business_email
 from src.core.security.password_policy import validate_password_strength
+
+
+def _validate_business_email(v: str) -> str:
+    """Validate email is a business email. Raises ValueError if personal."""
+    validate_business_email(v)
+    return v
 
 
 # Schema for register start (optional step 1)
@@ -10,6 +17,8 @@ class RegisterStartRequest(BaseModel):
     """Schema for register start - validate email."""
 
     email: EmailStr
+
+    _validate_email = field_validator("email")(_validate_business_email)
 
 
 class RegisterStartResponse(BaseModel):
@@ -33,6 +42,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8, max_length=64)
     first_name: str = Field(min_length=1, max_length=100)
 
+    _validate_email = field_validator("email")(_validate_business_email)
     _validate_password = field_validator("password")(_validate_password)
     last_name: str = Field(min_length=1, max_length=100)
     phone_number: str | None = Field(None, max_length=20)
@@ -136,3 +146,26 @@ class ResetPasswordResponse(BaseModel):
     """Schema for reset password response."""
 
     password_reset: bool = True
+
+
+# Schema for Google OAuth login
+class GoogleAuthRequest(BaseModel):
+    """Schema for Google OAuth login/register."""
+
+    id_token: str = Field(min_length=1)
+
+
+# Schema for set password (for OAuth users without password)
+class SetPasswordRequest(BaseModel):
+    """Schema for setting password on an OAuth-created account."""
+
+    new_password: str = Field(min_length=8, max_length=64)
+    confirm_password: str = Field(min_length=8, max_length=64)
+
+    _validate_password = field_validator("new_password")(_validate_password)
+
+    @model_validator(mode="after")
+    def passwords_match(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError("Passwords do not match")
+        return self

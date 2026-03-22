@@ -192,11 +192,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         field = error["loc"][-1] if error["loc"] else "unknown"
         error_type = error["type"]
 
+        # Convert context values to strings to avoid serialization errors
+        # (Pydantic may put ValueError objects in ctx)
+        raw_ctx = error.get("ctx", {})
+        context = {k: str(v) for k, v in raw_ctx.items()}
+
         errors.append(
             {
                 "field": field,
                 "type": error_type,
-                "context": error.get("ctx", {}),
+                "context": context,
             }
         )
 
