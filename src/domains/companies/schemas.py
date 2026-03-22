@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class CompanyCreateRequest(BaseModel):
@@ -139,3 +139,36 @@ class CompanySectorResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ── Invitation schemas ──
+
+
+class InviteUserRequest(BaseModel):
+    """Request schema for inviting a user to a company."""
+
+    email: EmailStr
+    role: str = Field(..., min_length=1, max_length=50)
+
+
+class InvitationResponse(BaseModel):
+    """Response schema for a company invitation."""
+
+    id: uuid.UUID
+    company_id: uuid.UUID
+    email: str
+    role: str
+    is_accepted: bool
+    expires_at: datetime
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AcceptInvitationRequest(BaseModel):
+    """Request schema for accepting an invitation (for unregistered users)."""
+
+    token: str = Field(..., min_length=1)
+    password: str | None = Field(None, min_length=8, max_length=64)
+    first_name: str | None = Field(None, min_length=1, max_length=100)
+    last_name: str | None = Field(None, min_length=1, max_length=100)

@@ -1,10 +1,11 @@
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
     Boolean,
     Date,
+    DateTime,
     ForeignKey,
     Integer,
     Numeric,
@@ -159,6 +160,53 @@ class Company(Base, TimestampMixin):
         for field, value in data.items():
             if field in allowed_fields and hasattr(self, field):
                 setattr(self, field, value)
+
+
+class CompanyInvitation(Base, TimestampMixin):
+    """Invitation to join a company with a specific role.
+
+    Token is sent via email. Expires after 7 days.
+    If invitee is not registered, they can sign up using the token.
+    """
+
+    __tablename__ = "company_invitations"
+
+    INVITATION_VALIDITY_DAYS = 7
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("company_roles.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    invited_by: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    token: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    is_accepted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    company: Mapped["Company"] = relationship("Company", lazy="selectin")
+    role: Mapped["CompanyRole"] = relationship("CompanyRole", lazy="selectin")
+
+    def is_expired(self) -> bool:
+        """Check if invitation has expired."""
+        return datetime.now(timezone.utc) > self.expires_at
+
+    def accept(self) -> None:
+        """Mark invitation as accepted."""
+        self.is_accepted = True
 
 
 class CompanySector(Base, TimestampMixin):

@@ -11,6 +11,7 @@ from src.domains.companies.dependencies import (
 )
 from src.domains.companies.models import UserCompany
 from src.domains.companies.schemas import (
+    AcceptInvitationRequest,
     CompanyCreateRequest,
     CompanyMemberListItem,
     CompanyResponse,
@@ -18,6 +19,8 @@ from src.domains.companies.schemas import (
     CompanySectorResponse,
     CompanySectorUpdateRequest,
     CompanyUpdateRequest,
+    InvitationResponse,
+    InviteUserRequest,
     MyCompanyListItem,
     PaginatedCompanyListResponse,
 )
@@ -220,14 +223,39 @@ async def update_company_sector(
     return CompanySectorResponse.model_validate(sector)
 
 
-@router.post("/{company_id}/invite-user")
+@router.post(
+    "/{company_id}/invite-user",
+    response_model=InvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def invite_user(
     company_id: uuid.UUID,
+    data: InviteUserRequest,
+    current_user: User = Depends(get_current_user),
     user_company: UserCompany = Depends(require_company_admin_or_owner),
+    company_service: CompanyService = Depends(get_company_service),
+) -> InvitationResponse:
+    """Invite a user to the company."""
+    return await company_service.invite_user(
+        company_id=company_id,
+        email=data.email,
+        role_name=data.role,
+        inviter=current_user,
+    )
+
+
+@router.post(
+    "/invitations/accept",
+    status_code=status.HTTP_200_OK,
+)
+async def accept_invitation(
+    data: AcceptInvitationRequest,
+    company_service: CompanyService = Depends(get_company_service),
 ):
-    """Invite a user to the company (placeholder)."""
-    return {
-        "message": "User invitation endpoint accessed successfully",
-        "company_id": company_id,
-        "acting_role": user_company.role.name,
-    }
+    """Accept a company invitation. Can be used by registered or new users."""
+    return await company_service.accept_invitation(
+        token=data.token,
+        password=data.password,
+        first_name=data.first_name,
+        last_name=data.last_name,
+    )

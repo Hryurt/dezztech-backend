@@ -200,3 +200,244 @@ class TestCompanyMembers:
         members = resp.json()
         assert len(members) >= 1
         assert members[0]["role"] == "owner"
+
+
+class TestInviteUser:
+    """POST /companies/{id}/invite-user"""
+
+    async def test_invite_success(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        headers = auth_headers(registered_user["token"])
+        create_resp = await client.post(
+            f"{API}", headers=headers, json=_company_payload(mersis_number="INV00001")
+        )
+        company_id = create_resp.json()["id"]
+
+        resp = await client.post(
+            f"{API}/{company_id}/invite-user",
+            headers=headers,
+            json={"email": "invited@company.com", "role": "viewer"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["email"] == "invited@company.com"
+        assert data["role"] == "viewer"
+        assert data["is_accepted"] is False
+
+    async def test_invite_invalid_role(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        headers = auth_headers(registered_user["token"])
+        create_resp = await client.post(
+            f"{API}", headers=headers, json=_company_payload(mersis_number="INV00002")
+        )
+        company_id = create_resp.json()["id"]
+
+        resp = await client.post(
+            f"{API}/{company_id}/invite-user",
+            headers=headers,
+            json={"email": "user@company.com", "role": "owner"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error_code"] == "INVALID_INVITATION_ROLE"
+
+    async def test_invite_duplicate(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        headers = auth_headers(registered_user["token"])
+        create_resp = await client.post(
+            f"{API}", headers=headers, json=_company_payload(mersis_number="INV00003")
+        )
+        company_id = create_resp.json()["id"]
+
+        await client.post(
+            f"{API}/{company_id}/invite-user",
+            headers=headers,
+            json={"email": "dup@company.com", "role": "viewer"},
+        )
+        resp = await client.post(
+            f"{API}/{company_id}/invite-user",
+            headers=headers,
+            json={"email": "dup@company.com", "role": "viewer"},
+        )
+        assert resp.status_code == 409
+        assert resp.json()["error_code"] == "INVITATION_ALREADY_EXISTS"
+
+    async def test_invite_existing_member(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        """Can't invite someone who's already a member."""
+        headers = auth_headers(registered_user["token"])
+        create_resp = await client.post(
+            f"{API}", headers=headers, json=_company_payload(mersis_number="INV00004")
+        )
+        company_id = create_resp.json()["id"]
+
+        # The creator (registered_user) is already a member as owner
+        resp = await client.post(
+            f"{API}/{company_id}/invite-user",
+            headers=headers,
+            json={"email": registered_user["email"], "role": "viewer"},
+        )
+        assert resp.status_code == 409
+        assert resp.json()["error_code"] == "USER_ALREADY_MEMBER"
+
+    async def test_consultant_requires_admin(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        """Consultant role requires the invitee to have Admin system role."""
+        headers = auth_headers(registered_user["token"])
+        create_resp = await client.post(
+            f"{API}", headers=headers, json=_company_payload(mersis_number="INV00005")
+        )
+        company_id = create_resp.json()["id"]
+
+        # invited@notadmin.com is not registered — so not an admin
+        resp = await client.post(
+            f"{API}/{company_id}/invite-user",
+            headers=headers,
+            json={"email": "invited@notadmin.com", "role": "consultant"},
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error_code"] == "CONSULTANT_REQUIRES_ADMIN"
+
+    async def test_unauthenticated(self, client: AsyncClient):
+        resp = await client.post(
+            f"{API}/{uuid.uuid4()}/invite-user",
+            json={"email": "user@company.com", "role": "viewer"},
+        )
+        assert resp.status_code == 401
+
+
+class TestAcceptInvitation:
+    """POST /companies/invitations/accept"""
+
+    async def _create_invitation(
+        self, client: AsyncClient, headers: dict, mersis: str, email: str, role: str = "viewer"
+    ) -> tuple[str, str]:
+        """Helper: create company + invite. Returns (company_id, token)."""
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+        from tests.conftest import TEST_DATABASE_URL
+        from src.domains.companies.models import CompanyInvitation
+
+        create_resp = await client.post(
+            f"{API}", headers=headers, json=_company_payload(mersis_number=mersis)
+        )
+        company_id = create_resp.json()["id"]
+
+        await client.post(
+            f"{API}/{company_id}/invite-user",
+            headers=headers,
+            json={"email": email, "role": role},
+        )
+
+        # Get token from DB
+        engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as session:
+            result = await session.execute(
+                select(CompanyInvitation).where(
+                    CompanyInvitation.email == email,
+                    CompanyInvitation.is_accepted.is_(False),
+                )
+            )
+            inv = result.scalar_one()
+            token = inv.token
+        await engine.dispose()
+
+        return company_id, token
+
+    async def test_accept_new_user(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        headers = auth_headers(registered_user["token"])
+        company_id, token = await self._create_invitation(
+            client, headers, "ACC00001", "newguy@company.com"
+        )
+
+        resp = await client.post(
+            f"{API}/invitations/accept",
+            json={
+                "token": token,
+                "first_name": "New",
+                "last_name": "Guy",
+                "password": "NewGuy1234!",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["accepted"] is True
+        assert data["is_new_user"] is True
+
+    async def test_accept_existing_user(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        """Invite an already-registered user who is not yet a member."""
+        headers = auth_headers(registered_user["token"])
+
+        # Register a second user
+        from tests.conftest import _create_verified_user
+
+        user2 = await _create_verified_user(
+            client, email="user2@dezztech.com", password="User2Pass1!"
+        )
+
+        company_id, token = await self._create_invitation(
+            client, headers, "ACC00002", user2["email"]
+        )
+
+        resp = await client.post(
+            f"{API}/invitations/accept",
+            json={"token": token},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["accepted"] is True
+        assert data["is_new_user"] is False
+
+    async def test_accept_invalid_token(self, client: AsyncClient):
+        resp = await client.post(
+            f"{API}/invitations/accept",
+            json={"token": "nonexistent-token"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error_code"] == "INVALID_INVITATION"
+
+    async def test_accept_twice(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        headers = auth_headers(registered_user["token"])
+        _, token = await self._create_invitation(
+            client, headers, "ACC00003", "twice@company.com"
+        )
+
+        # Accept first time
+        await client.post(
+            f"{API}/invitations/accept",
+            json={"token": token, "first_name": "T", "last_name": "W"},
+        )
+
+        # Accept again
+        resp = await client.post(
+            f"{API}/invitations/accept",
+            json={"token": token},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error_code"] == "INVALID_INVITATION"
+
+    async def test_new_user_missing_name(
+        self, client: AsyncClient, registered_user: dict, auth_headers
+    ):
+        headers = auth_headers(registered_user["token"])
+        _, token = await self._create_invitation(
+            client, headers, "ACC00004", "noname@company.com"
+        )
+
+        resp = await client.post(
+            f"{API}/invitations/accept",
+            json={"token": token},
+        )
+        assert resp.status_code == 400

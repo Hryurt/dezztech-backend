@@ -36,7 +36,7 @@ async def setup_database():
     # Seed company roles
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
-        for role_name in ("owner", "admin", "accountant", "viewer"):
+        for role_name in ("owner", "admin", "accountant", "viewer", "consultant"):
             session.add(CompanyRole(name=role_name, permissions=[], is_active=True))
         await session.commit()
     await engine.dispose()

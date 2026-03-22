@@ -1,16 +1,28 @@
+import secrets
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domains.companies.constants import COMPANY_OWNER_ROLE
+from src.domains.companies.constants import (
+    COMPANY_CONSULTANT_ROLE,
+    COMPANY_OWNER_ROLE,
+    INVITABLE_ROLES,
+)
 from src.domains.companies.exceptions import (
     CompanyMersisConflictException,
     CompanyNotFoundException,
     CompanySectorConflictException,
     CompanySectorNotFoundException,
+    ConsultantRequiresAdminException,
+    InvalidInvitationException,
+    InvalidInvitationRoleException,
+    InvitationAlreadyExistsException,
+    UserAlreadyMemberException,
 )
 from src.domains.companies.models import (
     Company,
+    CompanyInvitation,
     CompanySector,
 )
 from src.domains.companies.repository import CompanyRepository
@@ -19,10 +31,12 @@ from src.domains.companies.schemas import (
     CompanyMemberListItem,
     CompanySectorCreateRequest,
     CompanyUpdateRequest,
+    InvitationResponse,
     MyCompanyListItem,
 )
 from src.domains.companies.utils import normalize_iban, normalize_pagination, normalize_search
-from src.domains.users.models import User
+from src.domains.users.models import User, UserRole
+from src.domains.users.repository import UserRepository
 from src.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -505,3 +519,193 @@ Companies may be active or inactive.
             },
         )
         return sector
+
+    # ── Invitation ──
+
+    async def invite_user(
+        self,
+        *,
+        company_id: uuid.UUID,
+        email: str,
+        role_name: str,
+        inviter: User,
+    ) -> InvitationResponse:
+        """Invite a user to join a company with a specific role.
+
+        Args:
+            company_id: Company ID
+            email: Email of the user to invite
+            role_name: Role to assign (admin, accountant, viewer, consultant)
+            inviter: The user sending the invitation
+
+        Returns:
+            InvitationResponse
+
+        Raises:
+            CompanyNotFoundException: If company not found
+            InvalidInvitationRoleException: If role is not invitable
+            ConsultantRequiresAdminException: If consultant role for non-admin
+            UserAlreadyMemberException: If user is already a member
+            InvitationAlreadyExistsException: If pending invite exists
+        """
+        if role_name not in INVITABLE_ROLES:
+            raise InvalidInvitationRoleException(role=role_name)
+
+        company = await self.repo.get_active_by_id(company_id)
+        if not company:
+            raise CompanyNotFoundException(company_id=company_id)
+
+        role = await self.repo.get_role_by_name(role_name)
+        if role is None:
+            raise InvalidInvitationRoleException(role=role_name)
+
+        user_repo = UserRepository(self.db)
+
+        # Consultant role requires the invitee to be a system Admin
+        if role_name == COMPANY_CONSULTANT_ROLE:
+            invitee = await user_repo.get_by_email(email)
+            if invitee is None or invitee.role != UserRole.ADMIN:
+                raise ConsultantRequiresAdminException()
+
+        # Check if user is already a member
+        existing_user = await user_repo.get_by_email(email)
+        if existing_user and await self.repo.membership_exists(
+            user_id=existing_user.id, company_id=company_id
+        ):
+            raise UserAlreadyMemberException(email=email)
+
+        # Check for existing pending invitation
+        existing_invite = await self.repo.get_pending_invitation(company_id, email)
+        if existing_invite:
+            raise InvitationAlreadyExistsException(email=email)
+
+        # Create invitation
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            days=CompanyInvitation.INVITATION_VALIDITY_DAYS
+        )
+
+        invitation = await self.repo.create_invitation(
+            company_id=company_id,
+            email=email,
+            role_id=role.id,
+            invited_by=inviter.id,
+            token=token,
+            expires_at=expires_at,
+        )
+        await self.db.commit()
+        await self.db.refresh(invitation)
+
+        # Send email
+        from src.core.email.service import send_company_invitation_email
+
+        await send_company_invitation_email(
+            to_email=email,
+            company_name=company.name,
+            inviter_name=inviter.full_name or inviter.email,
+            role=role_name,
+            invite_token=token,
+        )
+
+        logger.info(
+            "User invited to company",
+            extra={
+                "email": email,
+                "company_id": str(company_id),
+                "role": role_name,
+            },
+        )
+
+        return InvitationResponse(
+            id=invitation.id,
+            company_id=invitation.company_id,
+            email=invitation.email,
+            role=role_name,
+            is_accepted=invitation.is_accepted,
+            expires_at=invitation.expires_at,
+            created_at=invitation.created_at,
+        )
+
+    async def accept_invitation(
+        self,
+        *,
+        token: str,
+        password: str | None = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
+    ) -> dict:
+        """Accept a company invitation.
+
+        If the user is registered, adds them to the company.
+        If not, creates a new account and adds them.
+
+        Args:
+            token: Invitation token
+            password: Password for new user registration (optional)
+            first_name: First name for new user (required if not registered)
+            last_name: Last name for new user (required if not registered)
+
+        Returns:
+            Dict with accepted: True, company_id, is_new_user
+        """
+        invitation = await self.repo.get_invitation_by_token(token)
+
+        if invitation is None:
+            raise InvalidInvitationException()
+
+        if invitation.is_accepted:
+            raise InvalidInvitationException(detail="Invitation already accepted")
+
+        if invitation.is_expired():
+            raise InvalidInvitationException(detail="Invitation has expired")
+
+        user_repo = UserRepository(self.db)
+        user = await user_repo.get_by_email(invitation.email)
+        is_new_user = False
+
+        if user is None:
+            if not first_name or not last_name:
+                raise InvalidInvitationException(
+                    detail="First name and last name are required for new users"
+                )
+            user = await user_repo.create_oauth_user(
+                email=invitation.email,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            if password:
+                user.set_password(password)
+            user.email_verified_at = datetime.now(timezone.utc)
+            await self.db.flush()
+            is_new_user = True
+
+        # Check if already a member
+        if await self.repo.membership_exists(
+            user_id=user.id, company_id=invitation.company_id
+        ):
+            invitation.accept()
+            await self.db.commit()
+            raise UserAlreadyMemberException(email=invitation.email)
+
+        await self.repo.create_membership(
+            user_id=user.id,
+            company_id=invitation.company_id,
+            role_id=invitation.role_id,
+        )
+        invitation.accept()
+        await self.db.commit()
+
+        logger.info(
+            "Invitation accepted",
+            extra={
+                "email": invitation.email,
+                "company_id": str(invitation.company_id),
+                "is_new_user": is_new_user,
+            },
+        )
+
+        return {
+            "accepted": True,
+            "company_id": str(invitation.company_id),
+            "is_new_user": is_new_user,
+        }

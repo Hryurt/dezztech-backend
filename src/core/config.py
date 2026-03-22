@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str | None = None
     MICROSOFT_CLIENT_ID: str | None = None
 
+    # Email (SendGrid)
+    SENDGRID_API_KEY: str | None = None
+    SENDGRID_FROM_EMAIL: str = "noreply@dezztech.com"
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = []
 

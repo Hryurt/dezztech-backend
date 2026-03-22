@@ -4,8 +4,11 @@ from typing import Optional
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from datetime import datetime
+
 from src.domains.companies.models import (
     Company,
+    CompanyInvitation,
     CompanyRole,
     CompanySector,
     UserCompany,
@@ -244,4 +247,54 @@ class CompanyRepository:
             .returning(CompanySector.id)
         )
         result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    # ── CompanyInvitation ──
+
+    async def create_invitation(
+        self,
+        *,
+        company_id: uuid.UUID,
+        email: str,
+        role_id: uuid.UUID,
+        invited_by: uuid.UUID,
+        token: str,
+        expires_at: datetime,
+    ) -> CompanyInvitation:
+        """Create a company invitation."""
+        invitation = CompanyInvitation(
+            company_id=company_id,
+            email=email,
+            role_id=role_id,
+            invited_by=invited_by,
+            token=token,
+            expires_at=expires_at,
+        )
+        self.db.add(invitation)
+        return invitation
+
+    async def get_pending_invitation(
+        self,
+        company_id: uuid.UUID,
+        email: str,
+    ) -> Optional[CompanyInvitation]:
+        """Get a pending (not accepted, not expired) invitation."""
+        now = datetime.now()
+        result = await self.db.execute(
+            select(CompanyInvitation).where(
+                CompanyInvitation.company_id == company_id,
+                CompanyInvitation.email == email,
+                CompanyInvitation.is_accepted.is_(False),
+                CompanyInvitation.expires_at > now,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_invitation_by_token(
+        self, token: str
+    ) -> Optional[CompanyInvitation]:
+        """Get an invitation by its token."""
+        result = await self.db.execute(
+            select(CompanyInvitation).where(CompanyInvitation.token == token)
+        )
         return result.scalar_one_or_none()
