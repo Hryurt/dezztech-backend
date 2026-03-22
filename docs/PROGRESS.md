@@ -9,8 +9,8 @@
 
 | PRD Bolum | Konu | Durum |
 |-----------|------|-------|
-| 5.1.1 | Kayit (email + OTP) | Tamamlandi — Outlook OAuth eksik |
-| 5.1.2 | Giris (email + sifre + Google) | Tamamlandi — Outlook OAuth eksik |
+| 5.1.1 | Kayit (email + OTP + Google + Microsoft) | Tamamlandi |
+| 5.1.2 | Giris (email + sifre + Google + Microsoft) | Tamamlandi |
 | 5.1.3 | Parola yonetimi | Tamamlandi |
 | 5.1.4 | Profil yonetimi | Tamamlandi |
 | 5.2 | Firma yonetimi | Kismen — davet placeholder, silme yok, abonelik limiti yok |
@@ -68,6 +68,7 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 - [x] Is emaili kisitlamasi (blocklist: gmail, hotmail, yahoo, yandex, icloud vb.)
 - [x] Email + sifre ile giris → JWT access token (HS256)
 - [x] Google OAuth giris/kayit (POST /auth/google — id_token dogrulama, otomatik kayit)
+- [x] Microsoft OAuth giris/kayit (POST /auth/microsoft — JWKS dogrulama, otomatik kayit)
 - [x] OAuth kullanicilar icin sifreli/sifresiz hesap destegi (password_hash nullable)
 - [x] Sifre olusturma (POST /users/me/set-password — OAuth hesaplar icin)
 - [x] Sifre degistirme (mevcut sifre dogrulama + yeni sifre validasyon)
@@ -80,7 +81,6 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 - [x] has_password alani UserMeResponse'a eklendi
 
 ### Yapilmadi (PRD gereksinimleri)
-- [ ] Microsoft Outlook OAuth giris (PRD 5.1.1.3, 5.1.2.2)
 - [ ] Refresh token mekanizmasi
 
 ### Modeller
@@ -100,6 +100,7 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 | POST | /api/v1/auth/forgot-password | Tamamlandi |
 | POST | /api/v1/auth/reset-password | Tamamlandi |
 | POST | /api/v1/auth/google | Tamamlandi |
+| POST | /api/v1/auth/microsoft | Tamamlandi |
 | GET | /api/v1/users/me | Tamamlandi |
 | PATCH | /api/v1/users/me | Tamamlandi |
 | PATCH | /api/v1/users/me/password | Tamamlandi |

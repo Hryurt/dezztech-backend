@@ -148,9 +148,15 @@ class ResetPasswordResponse(BaseModel):
     password_reset: bool = True
 
 
-# Schema for Google OAuth login
+# Schema for OAuth login (Google / Microsoft)
 class GoogleAuthRequest(BaseModel):
     """Schema for Google OAuth login/register."""
+
+    id_token: str = Field(min_length=1)
+
+
+class MicrosoftAuthRequest(BaseModel):
+    """Schema for Microsoft OAuth login/register."""
 
     id_token: str = Field(min_length=1)
 

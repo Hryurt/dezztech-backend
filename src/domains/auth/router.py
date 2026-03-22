@@ -6,6 +6,7 @@ from src.domains.auth.schemas import (
     ForgotPasswordResponse,
     GoogleAuthRequest,
     LoginRequest,
+    MicrosoftAuthRequest,
     RegisterRequest,
     RegisterResponse,
     RegisterStartRequest,
@@ -180,3 +181,22 @@ async def google_auth(
     If user doesn't exist, auto-registers without password.
     """
     return await auth_service.google_auth(id_token_str=data.id_token)
+
+
+@router.post(
+    "/microsoft",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Microsoft OAuth login/register",
+    description="Authenticate or register with Microsoft ID token",
+)
+async def microsoft_auth(
+    data: MicrosoftAuthRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """Login or register with Microsoft OAuth.
+
+    Frontend sends the Microsoft ID token. Backend verifies it and returns JWT.
+    If user doesn't exist, auto-registers without password.
+    """
+    return await auth_service.microsoft_auth(id_token_str=data.id_token)

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     # OAuth
     GOOGLE_CLIENT_ID: str | None = None
+    MICROSOFT_CLIENT_ID: str | None = None
 
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = []

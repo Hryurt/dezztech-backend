@@ -170,12 +170,23 @@ class GoogleAuthException(UnauthorizedException):
         )
 
 
+class MicrosoftAuthException(UnauthorizedException):
+    """Exception raised when Microsoft OAuth token verification fails."""
+
+    def __init__(self, detail: str = "Invalid Microsoft token"):
+        super().__init__(
+            message=detail,
+            error_code="MICROSOFT_AUTH_FAILED",
+            details={},
+        )
+
+
 class PasswordNotSetException(BadRequestException):
     """Exception raised when user tries to login with password but has no password set."""
 
     def __init__(self):
         super().__init__(
-            message="This account uses social login. Please log in with Google or set a password first.",
+            message="This account uses social login. Log in with Google/Microsoft or set a password.",
             error_code="PASSWORD_NOT_SET",
             details={},
         )

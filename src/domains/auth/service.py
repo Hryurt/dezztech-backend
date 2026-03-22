@@ -10,6 +10,7 @@ from src.domains.auth.exceptions import (
     EmailNotVerifiedException,
     GoogleAuthException,
     InvalidCredentialsException,
+    MicrosoftAuthException,
     OTPExpiredException,
     OTPInvalidException,
     OTPResendTooSoonException,
@@ -330,6 +331,42 @@ class AuthService:
 
         return TokenResponse(access_token=access_token, token_type="bearer")
 
+    async def _oauth_login_or_register(
+        self,
+        *,
+        email: str,
+        first_name: str,
+        last_name: str,
+        provider: str,
+    ) -> TokenResponse:
+        """Shared logic for OAuth login/register (Google, Microsoft).
+
+        If user doesn't exist, creates a new passwordless account.
+        If user exists, ensures email is verified and account is active.
+        """
+        user = await self.user_repo.get_by_email(email)
+
+        if user is None:
+            user = await self.user_repo.create_oauth_user(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            user.email_verified_at = datetime.now(timezone.utc)
+            await self.db.commit()
+            await self.db.refresh(user)
+            logger.info(f"{provider} OAuth user registered: {email} (ID: {user.id})")
+        else:
+            if user.email_verified_at is None:
+                user.email_verified_at = datetime.now(timezone.utc)
+                await self.db.commit()
+
+            if not user.is_active:
+                raise UserInactiveException(user_id=user.id)
+
+        access_token = create_access_token(subject=str(user.id))
+        return TokenResponse(access_token=access_token, token_type="bearer")
+
     async def google_auth(self, id_token_str: str) -> TokenResponse:
         """Authenticate or register a user via Google OAuth.
 
@@ -364,32 +401,58 @@ class AuthService:
         if not idinfo.get("email_verified", False):
             raise GoogleAuthException(detail="Google email is not verified")
 
-        user = await self.user_repo.get_by_email(email)
+        return await self._oauth_login_or_register(
+            email=email,
+            first_name=idinfo.get("given_name", ""),
+            last_name=idinfo.get("family_name", ""),
+            provider="Google",
+        )
 
-        if user is None:
-            # Auto-register
-            first_name = idinfo.get("given_name", "")
-            last_name = idinfo.get("family_name", "")
-            user = await self.user_repo.create_oauth_user(
-                email=email,
-                first_name=first_name,
-                last_name=last_name,
+    async def microsoft_auth(self, id_token_str: str) -> TokenResponse:
+        """Authenticate or register a user via Microsoft OAuth.
+
+        Args:
+            id_token_str: Microsoft ID token from frontend
+
+        Returns:
+            TokenResponse with JWT access token
+
+        Raises:
+            MicrosoftAuthException: If token verification fails
+            UserInactiveException: If user is inactive
+        """
+        import jwt as pyjwt
+
+        from src.core.config import settings
+
+        if not settings.MICROSOFT_CLIENT_ID:
+            raise MicrosoftAuthException(detail="Microsoft OAuth is not configured")
+
+        jwks_url = "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+
+        try:
+            jwks_client = pyjwt.PyJWKClient(jwks_url)
+            signing_key = jwks_client.get_signing_key_from_jwt(id_token_str)
+            payload = pyjwt.decode(
+                id_token_str,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=settings.MICROSOFT_CLIENT_ID,
+                options={"verify_iss": False},
             )
-            user.email_verified_at = datetime.now(timezone.utc)
-            await self.db.commit()
-            await self.db.refresh(user)
-            logger.info(f"Google OAuth user registered: {email} (ID: {user.id})")
-        else:
-            # Existing user — ensure email is verified
-            if user.email_verified_at is None:
-                user.email_verified_at = datetime.now(timezone.utc)
-                await self.db.commit()
+        except pyjwt.exceptions.PyJWTError:
+            raise MicrosoftAuthException(detail="Invalid Microsoft token")
 
-            if not user.is_active:
-                raise UserInactiveException(user_id=user.id)
+        email: str | None = payload.get("preferred_username") or payload.get("email")
+        if not email:
+            raise MicrosoftAuthException(detail="Microsoft token missing email")
 
-        access_token = create_access_token(subject=str(user.id))
-        return TokenResponse(access_token=access_token, token_type="bearer")
+        return await self._oauth_login_or_register(
+            email=email,
+            first_name=payload.get("given_name", ""),
+            last_name=payload.get("family_name", ""),
+            provider="Microsoft",
+        )
 
     async def get_user_by_id(self, user_id: uuid.UUID) -> User:
         """Get user by ID.
