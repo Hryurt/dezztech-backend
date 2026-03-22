@@ -8,10 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domains.auth.exceptions import (
     EmailAlreadyVerifiedException,
     EmailNotVerifiedException,
+    GoogleAuthException,
     InvalidCredentialsException,
     OTPExpiredException,
     OTPInvalidException,
     OTPResendTooSoonException,
+    PasswordNotSetException,
     PasswordReuseNotAllowedException,
 )
 from src.domains.auth.models import EmailVerificationCode, PasswordResetToken
@@ -304,7 +306,14 @@ class AuthService:
         """
         user = await self.user_repo.get_by_email(data.email)
 
-        if user is None or not user.check_password(data.password):
+        if user is None:
+            logger.warning("Failed login attempt")
+            raise InvalidCredentialsException()
+
+        if not user.has_password:
+            raise PasswordNotSetException()
+
+        if not user.check_password(data.password):
             logger.warning("Failed login attempt")
             raise InvalidCredentialsException()
 
@@ -319,6 +328,67 @@ class AuthService:
         logger.info(f"User logged in (ID: {user.id})")
         access_token = create_access_token(subject=str(user.id))
 
+        return TokenResponse(access_token=access_token, token_type="bearer")
+
+    async def google_auth(self, id_token_str: str) -> TokenResponse:
+        """Authenticate or register a user via Google OAuth.
+
+        Args:
+            id_token_str: Google ID token from frontend
+
+        Returns:
+            TokenResponse with JWT access token
+
+        Raises:
+            GoogleAuthException: If token verification fails
+            UserInactiveException: If user is inactive
+        """
+        from google.auth.transport import requests as google_requests
+        from google.oauth2 import id_token as google_id_token
+
+        from src.core.config import settings
+
+        if not settings.GOOGLE_CLIENT_ID:
+            raise GoogleAuthException(detail="Google OAuth is not configured")
+
+        try:
+            idinfo = google_id_token.verify_oauth2_token(
+                id_token_str,
+                google_requests.Request(),
+                settings.GOOGLE_CLIENT_ID,
+            )
+        except ValueError:
+            raise GoogleAuthException(detail="Invalid Google token")
+
+        email: str = idinfo["email"]
+        if not idinfo.get("email_verified", False):
+            raise GoogleAuthException(detail="Google email is not verified")
+
+        user = await self.user_repo.get_by_email(email)
+
+        if user is None:
+            # Auto-register
+            first_name = idinfo.get("given_name", "")
+            last_name = idinfo.get("family_name", "")
+            user = await self.user_repo.create_oauth_user(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            user.email_verified_at = datetime.now(timezone.utc)
+            await self.db.commit()
+            await self.db.refresh(user)
+            logger.info(f"Google OAuth user registered: {email} (ID: {user.id})")
+        else:
+            # Existing user — ensure email is verified
+            if user.email_verified_at is None:
+                user.email_verified_at = datetime.now(timezone.utc)
+                await self.db.commit()
+
+            if not user.is_active:
+                raise UserInactiveException(user_id=user.id)
+
+        access_token = create_access_token(subject=str(user.id))
         return TokenResponse(access_token=access_token, token_type="bearer")
 
     async def get_user_by_id(self, user_id: uuid.UUID) -> User:

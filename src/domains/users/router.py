@@ -3,6 +3,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, status
 from src.domains.auth.dependencies import get_current_active_user
 from src.domains.users.dependencies import get_user_service
 from src.domains.users.models import User
+from src.domains.auth.schemas import SetPasswordRequest
 from src.domains.users.schemas import (
     DeleteAccountRequest,
     EmailChangeRequest,
@@ -105,3 +106,17 @@ async def delete_me(
 ) -> None:
     """Soft delete (deactivate) current authenticated user's account."""
     await user_service.deactivate_account(current_user, data)
+
+
+@router.post(
+    "/me/set-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Set password for OAuth account",
+)
+async def set_password(
+    data: SetPasswordRequest,
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service),
+) -> None:
+    """Set password for an account created via social login (no existing password)."""
+    await user_service.set_password(current_user, data.new_password)

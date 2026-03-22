@@ -4,6 +4,7 @@ from src.domains.auth.dependencies import get_auth_service, get_current_user
 from src.domains.auth.schemas import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
+    GoogleAuthRequest,
     LoginRequest,
     RegisterRequest,
     RegisterResponse,
@@ -160,3 +161,22 @@ async def reset_password(
     """Reset password using reset token."""
     await auth_service.reset_password(data.token, data.password)
     return ResetPasswordResponse(password_reset=True)
+
+
+@router.post(
+    "/google",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Google OAuth login/register",
+    description="Authenticate or register with Google ID token",
+)
+async def google_auth(
+    data: GoogleAuthRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """Login or register with Google OAuth.
+
+    Frontend sends the Google ID token. Backend verifies it and returns JWT.
+    If user doesn't exist, auto-registers without password.
+    """
+    return await auth_service.google_auth(id_token_str=data.id_token)

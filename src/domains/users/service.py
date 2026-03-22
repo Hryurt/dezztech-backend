@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domains.auth.exceptions import (
     InvalidCredentialsException,
     OTPInvalidException,
+    PasswordAlreadySetException,
+    PasswordNotSetException,
     PasswordReuseNotAllowedException,
 )
 from src.core.logger import get_logger
@@ -164,6 +166,9 @@ class UserService:
             InvalidCredentialsException: If current_password is incorrect
             PasswordReuseNotAllowedException: If new_password equals current password
         """
+        if not user.has_password:
+            raise PasswordNotSetException()
+
         if not user.check_password(data.current_password):
             raise InvalidCredentialsException()
 
@@ -171,6 +176,23 @@ class UserService:
             raise PasswordReuseNotAllowedException()
 
         user.set_password(data.new_password)
+        await self.db.commit()
+        await self.db.refresh(user)
+
+    async def set_password(self, user: User, new_password: str) -> None:
+        """Set password for an OAuth user who has no password.
+
+        Args:
+            user: User to update
+            new_password: New password to set
+
+        Raises:
+            PasswordAlreadySetException: If user already has a password
+        """
+        if user.has_password:
+            raise PasswordAlreadySetException()
+
+        user.set_password(new_password)
         await self.db.commit()
         await self.db.refresh(user)
 

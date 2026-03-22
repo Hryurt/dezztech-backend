@@ -157,3 +157,36 @@ class PasswordReuseNotAllowedException(AppException):
             status_code=400,
             message="New password cannot be the same as the current password",
         )
+
+
+class GoogleAuthException(UnauthorizedException):
+    """Exception raised when Google OAuth token verification fails."""
+
+    def __init__(self, detail: str = "Invalid Google token"):
+        super().__init__(
+            message=detail,
+            error_code="GOOGLE_AUTH_FAILED",
+            details={},
+        )
+
+
+class PasswordNotSetException(BadRequestException):
+    """Exception raised when user tries to login with password but has no password set."""
+
+    def __init__(self):
+        super().__init__(
+            message="This account uses social login. Please log in with Google or set a password first.",
+            error_code="PASSWORD_NOT_SET",
+            details={},
+        )
+
+
+class PasswordAlreadySetException(BadRequestException):
+    """Exception raised when user tries to set a password but already has one."""
+
+    def __init__(self):
+        super().__init__(
+            message="Password is already set. Use change password instead.",
+            error_code="PASSWORD_ALREADY_SET",
+            details={},
+        )

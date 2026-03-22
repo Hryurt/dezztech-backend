@@ -62,3 +62,25 @@ class UserRepository:
         user.set_password(data.password)
         self.db.add(user)
         return user
+
+    async def create_oauth_user(
+        self,
+        *,
+        email: str,
+        first_name: str,
+        last_name: str,
+    ) -> User:
+        """Create a new user from OAuth (no password).
+
+        Returns:
+            Created user object (added to session, not committed)
+        """
+        user = User(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            is_active=True,
+            password_hash=None,
+        )
+        self.db.add(user)
+        return user

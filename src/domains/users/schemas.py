@@ -154,6 +154,7 @@ class UserMeResponse(BaseModel):
     how_did_you_hear: str | None
     email_verified_at: datetime | None
     is_active: bool
+    has_password: bool
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

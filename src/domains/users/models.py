@@ -29,7 +29,7 @@ class User(Base, TimestampMixin):
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[UserRole] = mapped_column(
@@ -84,6 +84,11 @@ class User(Base, TimestampMixin):
         """Deactivate user account."""
         self.is_active = False
 
+    @property
+    def has_password(self) -> bool:
+        """Check if user has a password set."""
+        return self.password_hash is not None
+
     def check_password(self, password: str) -> bool:
         """Verify password against stored hash.
 
@@ -93,6 +98,8 @@ class User(Base, TimestampMixin):
         Returns:
             True if password matches, False otherwise
         """
+        if self.password_hash is None:
+            return False
         return verify_password(password, self.password_hash)
 
     def set_password(self, password: str) -> None:

@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_NAME: str = "Dezztech Backend"
 
+    # OAuth
+    GOOGLE_CLIENT_ID: str | None = None
+
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = []
 
