@@ -71,6 +71,7 @@ Format: `<action>: <message>` (max 50 karakter)
 Action tipleri: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`
 
 **Co-Authored-By ekleme. Commit mesajina kendini koyma.**
+**pyproject.toml degisirse uv.lock da commitlenmeli.**
 
 ## Komutlar
 
