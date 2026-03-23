@@ -86,6 +86,12 @@ class CompanyService:
         Raises:
             CompanyMersisConflictException: If MERSIS number already exists
         """
+        # Enforce subscription limits
+        from src.domains.subscriptions.service import SubscriptionService
+
+        sub_service = SubscriptionService(self.db)
+        await sub_service.enforce_company_creation_limit(user_id)
+
         if await self.repo.exists_by_mersis(data.mersis_number):
             raise CompanyMersisConflictException(mersis_number=data.mersis_number)
 
@@ -577,6 +583,17 @@ Companies may be active or inactive.
         if not company:
             raise CompanyNotFoundException(company_id=company_id)
 
+        # Enforce member limit based on company owner's subscription
+        from src.domains.subscriptions.repository import SubscriptionRepository
+
+        sub_repo = SubscriptionRepository(self.db)
+        owner_id = await sub_repo.get_company_owner_id(company_id)
+        if owner_id:
+            from src.domains.subscriptions.service import SubscriptionService
+
+            sub_service = SubscriptionService(self.db)
+            await sub_service.enforce_member_limit(owner_id, company_id)
+
         role = await self.repo.get_role_by_name(role_name)
         if role is None:
             raise InvalidInvitationRoleException(role=role_name)
@@ -699,6 +716,13 @@ Companies may be active or inactive.
                 user.set_password(password)
             user.email_verified_at = datetime.now(timezone.utc)
             await self.db.flush()
+
+            # Assign freemium subscription to new user
+            from src.domains.subscriptions.service import SubscriptionService
+
+            sub_service = SubscriptionService(self.db)
+            await sub_service.create_freemium(user.id)
+
             is_new_user = True
 
         # Check if already a member

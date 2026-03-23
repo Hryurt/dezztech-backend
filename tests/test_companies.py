@@ -23,16 +23,22 @@ def _company_payload(**overrides) -> dict:
 class TestCreateCompany:
     """POST /companies"""
 
-    async def test_success(self, client: AsyncClient, registered_user: dict, auth_headers):
-        headers = auth_headers(registered_user["token"])
+    async def test_success(self, client: AsyncClient, basic_user: dict, auth_headers):
+        headers = auth_headers(basic_user["token"])
         resp = await client.post(f"{API}", headers=headers, json=_company_payload())
         assert resp.status_code == 201
         data = resp.json()
         assert data["name"] == "Test Sirket A.S."
         assert data["is_active"] is True
 
-    async def test_duplicate_mersis(self, client: AsyncClient, registered_user: dict, auth_headers):
-        headers = auth_headers(registered_user["token"])
+    async def test_duplicate_mersis(self, client: AsyncClient, auth_headers):
+        """Needs Pro plan (2 company limit) to test MERSIS duplicate vs limit."""
+        from tests.conftest import _create_verified_user, _upgrade_plan
+
+        user = await _create_verified_user(client, email="dupmersis@dezztech.com")
+        await _upgrade_plan(user["user_id"], "pro")
+        headers = auth_headers(user["token"])
+
         await client.post(f"{API}", headers=headers, json=_company_payload(mersis_number="DUP12345"))
         resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="DUP12345")
@@ -48,8 +54,8 @@ class TestCreateCompany:
 class TestListMyCompanies:
     """GET /companies/my"""
 
-    async def test_success(self, client: AsyncClient, registered_user: dict, auth_headers):
-        headers = auth_headers(registered_user["token"])
+    async def test_success(self, client: AsyncClient, basic_user: dict, auth_headers):
+        headers = auth_headers(basic_user["token"])
         await client.post(f"{API}", headers=headers, json=_company_payload(mersis_number="LIST0001"))
 
         resp = await client.get(f"{API}/my", headers=headers)
@@ -66,8 +72,8 @@ class TestListMyCompanies:
 class TestGetCompany:
     """GET /companies/{id}"""
 
-    async def test_success(self, client: AsyncClient, registered_user: dict, auth_headers):
-        headers = auth_headers(registered_user["token"])
+    async def test_success(self, client: AsyncClient, basic_user: dict, auth_headers):
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="GET00001")
         )
@@ -77,8 +83,8 @@ class TestGetCompany:
         assert resp.status_code == 200
         assert resp.json()["id"] == company_id
 
-    async def test_not_member(self, client: AsyncClient, registered_user: dict, auth_headers):
-        headers = auth_headers(registered_user["token"])
+    async def test_not_member(self, client: AsyncClient, basic_user: dict, auth_headers):
+        headers = auth_headers(basic_user["token"])
         fake_id = str(uuid.uuid4())
         resp = await client.get(f"{API}/{fake_id}", headers=headers)
         assert resp.status_code == 403
@@ -87,8 +93,8 @@ class TestGetCompany:
 class TestUpdateCompany:
     """PATCH /companies/{id}"""
 
-    async def test_success(self, client: AsyncClient, registered_user: dict, auth_headers):
-        headers = auth_headers(registered_user["token"])
+    async def test_success(self, client: AsyncClient, basic_user: dict, auth_headers):
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="UPD00001")
         )
@@ -108,9 +114,9 @@ class TestDeleteCompany:
     """DELETE /companies/{id}"""
 
     async def test_owner_can_delete(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="DEL00001")
         )
@@ -124,10 +130,10 @@ class TestDeleteCompany:
         assert get_resp.status_code == 403
 
     async def test_non_owner_cannot_delete(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
         """Admin (non-owner) should not be able to delete."""
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="DEL00002")
         )
@@ -184,9 +190,9 @@ class TestDeactivateActivateCompany:
     """PATCH /companies/{id}/deactivate and /activate"""
 
     async def test_deactivate_and_activate(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="DEACT001")
         )
@@ -207,9 +213,9 @@ class TestCompanySectors:
     """CRUD for /companies/{id}/sectors"""
 
     async def test_create_and_list(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="SEC00001")
         )
@@ -245,9 +251,9 @@ class TestCompanySectors:
         assert del_resp.status_code == 204
 
     async def test_duplicate_nace_code(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="SEC00002")
         )
@@ -263,9 +269,9 @@ class TestCompanyMembers:
     """GET /companies/{id}/members"""
 
     async def test_list_members(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="MEM00001")
         )
@@ -282,9 +288,9 @@ class TestInviteUser:
     """POST /companies/{id}/invite-user"""
 
     async def test_invite_success(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="INV00001")
         )
@@ -302,9 +308,9 @@ class TestInviteUser:
         assert data["is_accepted"] is False
 
     async def test_invite_invalid_role(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="INV00002")
         )
@@ -319,9 +325,9 @@ class TestInviteUser:
         assert resp.json()["error_code"] == "INVALID_INVITATION_ROLE"
 
     async def test_invite_duplicate(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="INV00003")
         )
@@ -341,10 +347,10 @@ class TestInviteUser:
         assert resp.json()["error_code"] == "INVITATION_ALREADY_EXISTS"
 
     async def test_invite_existing_member(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
         """Can't invite someone who's already a member."""
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="INV00004")
         )
@@ -354,16 +360,16 @@ class TestInviteUser:
         resp = await client.post(
             f"{API}/{company_id}/invite-user",
             headers=headers,
-            json={"email": registered_user["email"], "role": "viewer"},
+            json={"email": basic_user["email"], "role": "viewer"},
         )
         assert resp.status_code == 409
         assert resp.json()["error_code"] == "USER_ALREADY_MEMBER"
 
     async def test_consultant_requires_admin(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
         """Consultant role requires the invitee to have Admin system role."""
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         create_resp = await client.post(
             f"{API}", headers=headers, json=_company_payload(mersis_number="INV00005")
         )
@@ -427,9 +433,9 @@ class TestAcceptInvitation:
         return company_id, token
 
     async def test_accept_new_user(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         company_id, token = await self._create_invitation(
             client, headers, "ACC00001", "newguy@company.com"
         )
@@ -449,10 +455,10 @@ class TestAcceptInvitation:
         assert data["is_new_user"] is True
 
     async def test_accept_existing_user(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
         """Invite an already-registered user who is not yet a member."""
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
 
         # Register a second user
         from tests.conftest import _create_verified_user
@@ -483,9 +489,9 @@ class TestAcceptInvitation:
         assert resp.json()["error_code"] == "INVALID_INVITATION"
 
     async def test_accept_twice(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         _, token = await self._create_invitation(
             client, headers, "ACC00003", "twice@company.com"
         )
@@ -505,9 +511,9 @@ class TestAcceptInvitation:
         assert resp.json()["error_code"] == "INVALID_INVITATION"
 
     async def test_new_user_missing_name(
-        self, client: AsyncClient, registered_user: dict, auth_headers
+        self, client: AsyncClient, basic_user: dict, auth_headers
     ):
-        headers = auth_headers(registered_user["token"])
+        headers = auth_headers(basic_user["token"])
         _, token = await self._create_invitation(
             client, headers, "ACC00004", "noname@company.com"
         )

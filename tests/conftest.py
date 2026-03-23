@@ -16,6 +16,7 @@ from src.core.database import Base, get_db
 # Import all models so Base.metadata knows about them
 import src.domains.auth.models  # noqa: F401
 import src.domains.companies.models  # noqa: F401
+import src.domains.subscriptions.models  # noqa: F401
 import src.domains.users.models  # noqa: F401
 
 # ── Test database URL ──
@@ -183,7 +184,34 @@ async def _create_verified_user(
     }
 
 
+async def _upgrade_plan(user_id: str, plan: str) -> None:
+    """Helper: upgrade a user's subscription plan directly in DB."""
+    from sqlalchemy import select
+
+    from src.domains.subscriptions.constants import PlanTier
+    from src.domains.subscriptions.models import UserSubscription
+
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session:
+        result = await session.execute(
+            select(UserSubscription).where(UserSubscription.user_id == user_id)
+        )
+        sub = result.scalar_one()
+        sub.plan = PlanTier(plan)
+        await session.commit()
+    await engine.dispose()
+
+
 @pytest.fixture
 async def registered_user(client: AsyncClient) -> dict:
-    """Create and verify a registered user, return user info with token."""
+    """Create and verify a registered user (freemium), return user info with token."""
     return await _create_verified_user(client)
+
+
+@pytest.fixture
+async def basic_user(client: AsyncClient) -> dict:
+    """Create a verified user with Basic plan (can create companies)."""
+    user = await _create_verified_user(client)
+    await _upgrade_plan(user["user_id"], "basic")
+    return user

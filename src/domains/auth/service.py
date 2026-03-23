@@ -203,8 +203,14 @@ class AuthService:
         )
         user = await user_service.create_user(user_data)
 
-        # Ensure user.id is generated before creating OTP
+        # Ensure user.id is generated before creating OTP and subscription
         await self.db.flush()
+
+        # Assign freemium subscription
+        from src.domains.subscriptions.service import SubscriptionService
+
+        sub_service = SubscriptionService(self.db)
+        await sub_service.create_freemium(user.id)
 
         await self._create_and_log_otp(user)
 
@@ -353,6 +359,14 @@ class AuthService:
                 last_name=last_name,
             )
             user.email_verified_at = datetime.now(timezone.utc)
+            await self.db.flush()
+
+            # Assign freemium subscription
+            from src.domains.subscriptions.service import SubscriptionService
+
+            sub_service = SubscriptionService(self.db)
+            await sub_service.create_freemium(user.id)
+
             await self.db.commit()
             await self.db.refresh(user)
             logger.info(f"{provider} OAuth user registered: {email} (ID: {user.id})")

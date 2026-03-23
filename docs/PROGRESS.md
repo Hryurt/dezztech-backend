@@ -13,14 +13,14 @@
 | 5.1.2 | Giris (email + sifre + Google + Microsoft) | Tamamlandi |
 | 5.1.3 | Parola yonetimi | Tamamlandi |
 | 5.1.4 | Profil yonetimi | Tamamlandi |
-| 5.2 | Firma yonetimi | Kismen — silme yok, abonelik limiti yok |
+| 5.2 | Firma yonetimi | Tamamlandi |
 | 5.3 | Urun yonetimi | Yapilmadi |
 | 5.4 | Tesvik ve destek yonetimi | Yapilmadi |
 | 5.5 | Basvuru yonetimi | Yapilmadi |
 | 5.6 | Yapay zeka modulleri | Yapilmadi |
 | 5.7 | Admin senaryolari | Yapilmadi |
 | 5.8 | Super Admin senaryolari | Yapilmadi |
-| 4 | Abonelik modeli | Yapilmadi |
+| 4 | Abonelik modeli | Kismen — model + limitler tamam, odeme entegrasyonu yok |
 | 10 | Dezzcovery soru seti | Yapilmadi |
 | 11 | Bildirim sistemi | Yapilmadi |
 | 12 | Dashboard | Yapilmadi |
@@ -136,8 +136,8 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 - [x] Email servisi (SendGrid, development'ta loglama)
 - [x] CompanyInvitation modeli
 - [x] Firma silme (hard delete — PRD 5.2.4, sadece Owner)
-- [ ] Abonelik bazli firma olusturma limiti (PRD 5.2.7)
-- [ ] Abonelik bazli uyelik limiti (PRD 5.2.7)
+- [x] Abonelik bazli firma olusturma limiti (PRD 5.2.7)
+- [x] Abonelik bazli uyelik limiti (PRD 5.2.7 — uyeler + bekleyen davetler sayilir)
 - [ ] CompanyBrand CRUD endpoint'leri
 - [ ] CompanySectorProfile CRUD endpoint'leri
 - [ ] PRD 8.4 Markalaşma Programi ek firma alanlari (model mevcut, alanlar tanimlanmali)
@@ -197,7 +197,22 @@ Henuz baslanmadi.
 
 ## PRD 4 — Abonelik Modeli
 
-Henuz baslanmadi.
+### Yapilan
+- [x] UserSubscription modeli (plan tier, billing cycle, extra quotas)
+- [x] 4 plan tieri: freemium, basic, pro, premium (PRD 4.1 limitleri)
+- [x] Kayit sirasinda otomatik Freemium atama (register, OAuth, invite accept)
+- [x] A la carte ek haklar (extra_company_quota, extra_product/member_quota_per_company)
+- [x] Firma olusturma limiti enforcement (freemium engeli + plan limiti)
+- [x] Uye davet limiti enforcement (uyeler + bekleyen davetler sayilir)
+- [x] GET /subscriptions/me — kullanicinin abonelik bilgisi
+- [x] PUT /subscriptions/change-plan — Super Admin plan degistirme
+- [x] PUT /subscriptions/extra-quotas — Super Admin ek hak guncelleme
+- [x] GET /subscriptions/{user_id} — Super Admin kullanici abonelik goruntuleme
+
+### Yapilmadi
+- [ ] iyzico odeme entegrasyonu
+- [ ] Abonelik fiyatlandirmasi
+- [ ] Otomatik yenileme / iptal akisi
 
 ---
 
