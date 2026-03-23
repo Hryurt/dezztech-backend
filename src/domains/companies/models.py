@@ -109,9 +109,10 @@ class Company(Base, TimestampMixin):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    sector_profiles: Mapped[list["CompanySectorProfile"]] = relationship(
+    sector_profile: Mapped["CompanySectorProfile"] = relationship(
         "CompanySectorProfile",
         back_populates="company",
+        uselist=False,
         cascade="all, delete-orphan",
         lazy="selectin",
     )
@@ -246,10 +247,9 @@ class CompanySector(Base, TimestampMixin):
 
 
 class CompanyBrand(Base, TimestampMixin):
-    """Registered brand/trademark for a company (PRD 8.2 — repeatable).
+    """Brand for a company (PRD 8.2 — repeatable).
 
-    A company can have multiple registered brands.
-    Used in Branding Program (PRD 8.4) and product associations.
+    A company can have multiple brands. Each brand has a name and optional URL.
     """
 
     __tablename__ = "company_brands"
@@ -271,12 +271,7 @@ class CompanyBrand(Base, TimestampMixin):
         index=True,
     )
     brand_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    has_domestic_registration: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
-    has_international_registration: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
+    brand_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     company: Mapped["Company"] = relationship(
         "Company",
@@ -286,33 +281,16 @@ class CompanyBrand(Base, TimestampMixin):
 
 
 class CompanySectorProfile(Base, TimestampMixin):
-    """Sector-specific company profile fields (PRD 8.3).
+    """Sector-specific company profile data (PRD 8.3).
 
-    EAV-like pattern: each row is one field value for a company.
-    Designed for form builder integration — each field is individually
-    referenceable by field_key (PRD 5.4.3 "Firma Bazli Alan").
+    One profile per company. Stores the company's sector type and all
+    sector-specific fields as a JSON document.
 
-    Exactly one value column should be populated per row.
-
-    Sector types: it, consulting, digital_mediation, education,
-    health_tourism, fintech, exhibition, congress, cultural_creative,
-    logistics, sports_tourism, technical_consultancy, conformity_assessment
-
-    Example field_keys per sector:
-      - it: it_sub_sector
-      - consulting: consulting_type, consulting_revenue_ratio
-      - health_tourism: institution_type, specialist_doctor_count, bed_count
-      - education: institution_type
+    The sector_type determines which fields are expected in the data column.
+    Form builder references individual fields via sector_type + key path.
     """
 
     __tablename__ = "company_sector_profiles"
-    __table_args__ = (
-        UniqueConstraint(
-            "company_id",
-            "field_key",
-            name="uq_company_sector_profile_field",
-        ),
-    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True
@@ -321,21 +299,15 @@ class CompanySectorProfile(Base, TimestampMixin):
         Uuid(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
+        unique=True,
         index=True,
     )
-    sector_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    field_key: Mapped[str] = mapped_column(String(100), nullable=False)
-    value_text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    value_numeric: Mapped[Optional[int]] = mapped_column(
-        Numeric(precision=15, scale=2), nullable=True
-    )
-    value_bool: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    value_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    value_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    sector_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     company: Mapped["Company"] = relationship(
         "Company",
-        back_populates="sector_profiles",
+        back_populates="sector_profile",
         lazy="selectin",
     )
 

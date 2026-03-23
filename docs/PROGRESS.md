@@ -140,15 +140,14 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 - [x] Abonelik bazli uyelik limiti (PRD 5.2.7 — uyeler + bekleyen davetler sayilir)
 - [ ] CompanyBrand CRUD endpoint'leri
 - [ ] CompanySectorProfile CRUD endpoint'leri
-- [ ] PRD 8.4 Markalaşma Programi ek firma alanlari (model mevcut, alanlar tanimlanmali)
 
 ### Modeller
 - Company — PRD 8.2 tam: kimlik, finans (sgk/vergi borcu, ihracat gelirleri), aktivite (activity_sectors JSON, exporter_unions JSON), iletisim (contact_email eklendi)
 - CompanyRole — name, permissions (JSON), is_active (owner/admin/accountant/viewer)
 - UserCompany — user_id, company_id, role_id, is_active (many-to-many with role)
 - CompanySector — company_id, nace_code, nace_name, brand_name
-- CompanyBrand — **YENI** company_id, brand_name, has_domestic_registration, has_international_registration
-- CompanySectorProfile — **YENI** company_id, sector_type, field_key, value_text/numeric/bool/date/json (EAV, form builder uyumlu)
+- CompanyBrand — company_id, brand_name, brand_url
+- CompanySectorProfile — company_id (unique, one-to-one), sector_type, data (JSON)
 - CompanyInvitation — **YENI** company_id, email, role_id, invited_by, token, expires_at, is_accepted
 
 ### Endpoint'ler
