@@ -181,14 +181,12 @@ class CompanyRepository:
         company_id: uuid.UUID,
         nace_code: str,
         nace_name: str,
-        brand_name: str | None,
     ) -> CompanySector:
-        """Create a new company sector."""
+        """Create a new company sector (NACE code)."""
         sector = CompanySector(
             company_id=company_id,
             nace_code=nace_code,
             nace_name=nace_name,
-            brand_name=brand_name,
         )
         self.db.add(sector)
         return sector
@@ -208,20 +206,6 @@ class CompanyRepository:
             .limit(1)
         )
         return (await self.db.execute(stmt)).scalar() is not None
-
-    async def get_sector_for_company(
-        self,
-        sector_id: uuid.UUID,
-        company_id: uuid.UUID,
-    ) -> Optional[CompanySector]:
-        """Get a sector by ID only if it belongs to the company."""
-        result = await self.db.execute(
-            select(CompanySector).where(
-                CompanySector.id == sector_id,
-                CompanySector.company_id == company_id,
-            )
-        )
-        return result.scalar_one_or_none()
 
     async def list_sectors_for_company(
         self, company_id: uuid.UUID

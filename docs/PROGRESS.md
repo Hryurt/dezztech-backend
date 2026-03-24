@@ -162,7 +162,6 @@ Her domain: `models.py`, `repository.py`, `service.py`, `router.py`, `schemas.py
 | GET | /api/v1/companies/{id}/members | Tamamlandi |
 | GET | /api/v1/companies/{id}/sectors | Tamamlandi |
 | POST | /api/v1/companies/{id}/sectors | Tamamlandi |
-| PATCH | /api/v1/companies/{id}/sectors/{sid} | Tamamlandi |
 | DELETE | /api/v1/companies/{id}/sectors/{sid} | Tamamlandi |
 | POST | /api/v1/companies/{id}/invite-user | Tamamlandi |
 | DELETE | /api/v1/companies/{id} | Tamamlandi |

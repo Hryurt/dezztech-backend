@@ -18,7 +18,6 @@ from src.domains.companies.schemas import (
     CompanyResponse,
     CompanySectorCreateRequest,
     CompanySectorResponse,
-    CompanySectorUpdateRequest,
     CompanyUpdateRequest,
     InvitationResponse,
     InviteUserRequest,
@@ -216,25 +215,6 @@ async def delete_company_sector(
     await company_service.delete_company_sector(
         company_id, sector_id, user_id=user_id
     )
-
-
-@router.patch(
-    "/{company_id}/sectors/{sector_id}",
-    response_model=CompanySectorResponse,
-)
-async def update_company_sector(
-    company_id: uuid.UUID,
-    sector_id: uuid.UUID,
-    data: CompanySectorUpdateRequest,
-    user_company: UserCompany = Depends(require_company_admin_or_owner),
-    company_service: CompanyService = Depends(get_company_service),
-) -> CompanySectorResponse:
-    """Update a sector's brand name."""
-    user_id = user_company.user_id
-    sector = await company_service.update_company_sector_brand(
-        company_id, sector_id, data.brand_name, user_id=user_id
-    )
-    return CompanySectorResponse.model_validate(sector)
 
 
 @router.post(

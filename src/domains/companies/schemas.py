@@ -114,17 +114,10 @@ class CompanyUpdateRequest(BaseModel):
 
 
 class CompanySectorCreateRequest(BaseModel):
-    """Request schema for creating a company sector."""
+    """Request schema for creating a company sector (NACE code)."""
 
     nace_code: str = Field(..., min_length=2, max_length=20)
     nace_name: str = Field(..., min_length=2, max_length=255)
-    brand_name: Optional[str] = None
-
-
-class CompanySectorUpdateRequest(BaseModel):
-    """Request schema for updating a company sector."""
-
-    brand_name: Optional[str] = None
 
 
 class CompanySectorResponse(BaseModel):
@@ -134,7 +127,6 @@ class CompanySectorResponse(BaseModel):
     company_id: uuid.UUID
     nace_code: str
     nace_name: str
-    brand_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

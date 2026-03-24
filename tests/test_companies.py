@@ -235,15 +235,6 @@ class TestCompanySectors:
         assert list_resp.status_code == 200
         assert len(list_resp.json()) >= 1
 
-        # Update sector brand
-        update_resp = await client.patch(
-            f"{API}/{company_id}/sectors/{sector_id}",
-            headers=headers,
-            json={"brand_name": "TechBrand"},
-        )
-        assert update_resp.status_code == 200
-        assert update_resp.json()["brand_name"] == "TechBrand"
-
         # Delete sector
         del_resp = await client.delete(
             f"{API}/{company_id}/sectors/{sector_id}", headers=headers

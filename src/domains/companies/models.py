@@ -233,17 +233,12 @@ class CompanySector(Base, TimestampMixin):
     )
     nace_code: Mapped[str] = mapped_column(String(20), nullable=False)
     nace_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    brand_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     company: Mapped["Company"] = relationship(
         "Company",
         back_populates="sectors",
         lazy="selectin",
     )
-
-    def update_brand_name(self, brand_name: str | None) -> None:
-        """Update the brand name."""
-        self.brand_name = brand_name
 
 
 class CompanyBrand(Base, TimestampMixin):

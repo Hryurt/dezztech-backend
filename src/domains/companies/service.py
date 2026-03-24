@@ -418,7 +418,6 @@ Companies may be active or inactive.
             company_id=company_id,
             nace_code=data.nace_code,
             nace_name=data.nace_name,
-            brand_name=data.brand_name,
         )
 
         await self.db.commit()
@@ -497,56 +496,6 @@ Companies may be active or inactive.
                 "company_id": str(company_id),
             },
         )
-
-    async def update_company_sector_brand(
-        self,
-        company_id: uuid.UUID,
-        sector_id: uuid.UUID,
-        brand_name: str | None,
-        user_id: uuid.UUID | None = None,
-    ) -> CompanySector:
-        """Update a company sector's brand name.
-
-        Args:
-            company_id: Company ID
-            sector_id: Sector ID
-            brand_name: New brand name
-            user_id: Optional user ID for membership verification
-
-        Returns:
-            Updated sector
-
-        Raises:
-            CompanyNotFoundException: If company not found or not active
-            CompanySectorNotFoundException: If sector not found or not belonging to company
-        """
-        if user_id is not None:
-            await self._ensure_user_membership(
-                user_id=user_id,
-                company_id=company_id,
-            )
-        company = await self.repo.get_active_by_id(company_id)
-        if not company:
-            raise CompanyNotFoundException(company_id=company_id)
-
-        sector = await self.repo.get_sector_for_company(sector_id, company_id)
-        if not sector:
-            raise CompanySectorNotFoundException(sector_id=sector_id)
-
-        sector.update_brand_name(brand_name)
-
-        await self.db.commit()
-        await self.db.refresh(sector)
-
-        logger.info(
-            "Company sector brand updated",
-            extra={
-                "sector_id": str(sector_id),
-                "company_id": str(company_id),
-                "company_name": company.name,
-            },
-        )
-        return sector
 
     # ── Invitation ──
 
