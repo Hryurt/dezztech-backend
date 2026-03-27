@@ -1,0 +1,489 @@
+import hashlib
+import secrets
+import uuid
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.domains.auth.exceptions import (
+    EmailAlreadyVerifiedException,
+    EmailNotVerifiedException,
+    GoogleAuthException,
+    InvalidCredentialsException,
+    MicrosoftAuthException,
+    OTPExpiredException,
+    OTPInvalidException,
+    OTPResendTooSoonException,
+    PasswordNotSetException,
+    PasswordReuseNotAllowedException,
+)
+from src.domains.auth.models import EmailVerificationCode, PasswordResetToken
+from src.domains.auth.repository import AuthRepository
+from src.domains.auth.schemas import (
+    LoginRequest,
+    RegisterRequest,
+    RegisterResponse,
+    RegisterStartResponse,
+    TokenResponse,
+)
+from src.domains.auth.utils import create_access_token, generate_otp_code, log_sensitive_debug
+from src.core.logger import get_logger
+from src.domains.users.exceptions import (
+    UserInactiveException,
+    UserNotFoundException,
+)
+from src.domains.users.models import User, UserRole
+from src.domains.users.repository import UserRepository
+from src.domains.users.schemas import UserCreateInternal
+from src.domains.users.service import UserService
+
+logger = get_logger(__name__)
+
+
+class AuthService:
+    """Service for authentication operations."""
+
+    def __init__(self, db: AsyncSession):
+        """Initialize AuthService with database session.
+
+        Args:
+            db: Database session
+        """
+        self.db = db
+        self.auth_repo = AuthRepository(db)
+        self.user_repo = UserRepository(db)
+
+    async def _create_and_log_otp(self, user: User) -> None:
+        """Create EmailVerificationCode and log it (no external email integration)."""
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=EmailVerificationCode.OTP_VALIDITY_MINUTES
+        )
+        code = await self.auth_repo.create_verification_code(
+            user.id,
+            generate_otp_code(),
+            expires_at,
+        )
+        log_sensitive_debug(f"Email OTP for {user.email}: {code.code}")
+
+    async def create_email_change_otp(self, user: User) -> None:
+        """Create email verification OTP for email change flow. Public wrapper for _create_and_log_otp."""
+        await self._create_and_log_otp(user)
+
+    async def forgot_password(self, email: str) -> None:
+        """Send password reset token for the given email.
+
+        If user does not exist, returns silently (does not leak user existence).
+
+        Args:
+            email: User email address
+        """
+        user = await self.user_repo.get_by_email(email)
+
+        if user is None:
+            # Do not leak whether the email exists
+            return
+
+        # Invalidate all existing active reset tokens for this user
+        await self.auth_repo.invalidate_active_tokens(user.id)
+
+        # Generate new reset token
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=PasswordResetToken.RESET_TOKEN_VALIDITY_MINUTES
+        )
+
+        reset_token = await self.auth_repo.create_reset_token(
+            user.id,
+            token_hash,
+            expires_at,
+        )
+
+        # Single commit for invalidation + new token creation
+        await self.db.commit()
+        await self.db.refresh(reset_token)
+
+        log_sensitive_debug(f"Password reset token for {user.email}: {raw_token}")
+
+    async def reset_password(self, token: str, new_password: str) -> None:
+        """Reset user password using a valid reset token.
+
+        Args:
+            token: Raw reset token from the reset link
+            new_password: New password to set
+
+        Raises:
+            OTPInvalidException: If token not found or invalid
+            OTPExpiredException: If token has expired
+            UserNotFoundException: If user not found
+        """
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+        reset_token = await self.auth_repo.get_active_reset_token(token_hash)
+
+        if reset_token is None:
+            raise OTPInvalidException()
+
+        if datetime.now(timezone.utc) > reset_token.expires_at:
+            reset_token.mark_as_used()
+            await self.db.commit()
+            raise OTPExpiredException()
+
+        user = await self.user_repo.get_by_id(reset_token.user_id)
+
+        if user is None:
+            raise UserNotFoundException(user_id=reset_token.user_id)
+
+        # Prevent password reuse
+        if user.check_password(new_password):
+            raise PasswordReuseNotAllowedException()
+
+        user.set_password(new_password)
+        reset_token.mark_as_used()
+
+        await self.db.commit()
+
+        logger.info(f"Password reset successful for user ID: {user.id}")
+
+    async def start_register(self, email: str) -> RegisterStartResponse:
+        """Check email existence and return registration status.
+
+        Args:
+            email: User email to check
+
+        Returns:
+            RegisterStartResponse with ok and already_registered
+
+        Raises:
+            EmailAlreadyVerifiedException: If user exists and email already verified
+        """
+        user = await self.user_repo.get_by_email(email)
+
+        if user is None:
+            return RegisterStartResponse(ok=True, already_registered=False)
+
+        if user.email_verified_at is not None:
+            raise EmailAlreadyVerifiedException(email=email)
+
+        return RegisterStartResponse(ok=True, already_registered=True)
+
+    async def register(self, data: RegisterRequest) -> RegisterResponse:
+        """Register a new user and send OTP.
+
+        Args:
+            data: Registration data (email, password, first_name, last_name, etc.)
+
+        Returns:
+            RegisterResponse with user_id and otp_sent
+
+        Raises:
+            EmailAlreadyVerifiedException: If user exists and email already verified
+        """
+        user_service = UserService(self.db)
+        user = await self.user_repo.get_by_email(data.email)
+
+        if user:
+            if user.email_verified_at:
+                raise EmailAlreadyVerifiedException(email=data.email)
+            # User exists but not verified - generate new OTP
+            await self._create_and_log_otp(user)
+            await self.db.commit()
+            return RegisterResponse(user_id=user.id, otp_sent=True)
+
+        # Create new user
+        user_data = UserCreateInternal(
+            email=data.email,
+            password=data.password,
+            first_name=data.first_name,
+            last_name=data.last_name,
+            role=UserRole.USER,
+            is_active=True,
+            phone_number=data.phone_number,
+            how_did_you_hear=data.how_did_you_hear,
+        )
+        user = await user_service.create_user(user_data)
+
+        # Ensure user.id is generated before creating OTP and subscription
+        await self.db.flush()
+
+        # Assign freemium subscription
+        from src.domains.subscriptions.service import SubscriptionService
+
+        sub_service = SubscriptionService(self.db)
+        await sub_service.create_freemium(user.id)
+
+        await self._create_and_log_otp(user)
+
+        # Single transaction commit
+        await self.db.commit()
+        await self.db.refresh(user)
+        return RegisterResponse(user_id=user.id, otp_sent=True)
+
+    async def verify_email(self, email: str, code: str) -> dict:
+        """Verify email with OTP code.
+
+        Args:
+            email: User email
+            code: 4-digit OTP code
+
+        Returns:
+            Dict with email_verified: True
+
+        Raises:
+            UserNotFoundException: If user not found
+            OTPInvalidException: If no valid code or code mismatch
+            OTPExpiredException: If code expired
+            OTPAttemptsExceededException: If max attempts exceeded
+        """
+        user = await self.user_repo.get_by_email(email)
+        if not user:
+            raise UserNotFoundException(email=email)
+
+        if user.email_verified_at:
+            raise EmailAlreadyVerifiedException(email=email)
+
+        verification_code = await self.auth_repo.get_latest_active_verification_code(user.id)
+        if not verification_code:
+            logger.warning(f"No verification code found for {email}")
+            raise OTPInvalidException()
+
+        try:
+            verification_code.verify_or_raise(code)
+        except Exception:
+            await self.db.commit()
+            raise
+
+        user.email_verified_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        logger.info(f"Email verified for {user.email} (ID: {user.id})")
+        return {"email_verified": True}
+
+    async def resend_otp(self, email: str) -> dict:
+        """Resend OTP for email verification.
+
+        Args:
+            email: User email
+
+        Returns:
+            Dict with otp_sent and optionally cooldown_seconds_remaining
+
+        Raises:
+            UserNotFoundException: If user not found
+            EmailAlreadyVerifiedException: If email already verified
+            OTPResendTooSoonException: If cooldown not elapsed
+        """
+        user = await self.user_repo.get_by_email(email)
+        if not user:
+            raise UserNotFoundException(email=email)
+
+        if user.email_verified_at:
+            raise EmailAlreadyVerifiedException(email=email)
+
+        latest_code = await self.auth_repo.get_latest_active_verification_code(user.id)
+        if latest_code and not latest_code.can_resend():
+            elapsed = (
+                datetime.now(timezone.utc) - latest_code.last_sent_at
+            ).total_seconds()
+            remaining = max(
+                0,
+                int(EmailVerificationCode.RESEND_COOLDOWN_SECONDS - elapsed),
+            )
+            raise OTPResendTooSoonException(cooldown_seconds_remaining=remaining)
+
+        await self._create_and_log_otp(user)
+        await self.db.commit()
+        return {
+            "otp_sent": True,
+            "cooldown_seconds_remaining": EmailVerificationCode.RESEND_COOLDOWN_SECONDS,
+        }
+
+    async def login(self, data: LoginRequest) -> TokenResponse:
+        """Authenticate user and return access token.
+
+        Args:
+            data: Login credentials (email, password)
+
+        Returns:
+            TokenResponse with JWT access token
+
+        Raises:
+            InvalidCredentialsException: If user does not exist or password incorrect
+            EmailNotVerifiedException: If email not verified
+            UserInactiveException: If user is inactive
+        """
+        user = await self.user_repo.get_by_email(data.email)
+
+        if user is None:
+            logger.warning("Failed login attempt")
+            raise InvalidCredentialsException()
+
+        if not user.has_password:
+            raise PasswordNotSetException()
+
+        if not user.check_password(data.password):
+            logger.warning("Failed login attempt")
+            raise InvalidCredentialsException()
+
+        if user.email_verified_at is None:
+            logger.warning("Login attempted with unverified email")
+            raise EmailNotVerifiedException()
+
+        if not user.is_active:
+            logger.warning(f"Inactive user login attempt (ID: {user.id})")
+            raise UserInactiveException(user_id=user.id)
+
+        logger.info(f"User logged in (ID: {user.id})")
+        access_token = create_access_token(subject=str(user.id))
+
+        return TokenResponse(access_token=access_token, token_type="bearer")
+
+    async def _oauth_login_or_register(
+        self,
+        *,
+        email: str,
+        first_name: str,
+        last_name: str,
+        provider: str,
+    ) -> TokenResponse:
+        """Shared logic for OAuth login/register (Google, Microsoft).
+
+        If user doesn't exist, creates a new passwordless account.
+        If user exists, ensures email is verified and account is active.
+        """
+        user = await self.user_repo.get_by_email(email)
+
+        if user is None:
+            user = await self.user_repo.create_oauth_user(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            user.email_verified_at = datetime.now(timezone.utc)
+            await self.db.flush()
+
+            # Assign freemium subscription
+            from src.domains.subscriptions.service import SubscriptionService
+
+            sub_service = SubscriptionService(self.db)
+            await sub_service.create_freemium(user.id)
+
+            await self.db.commit()
+            await self.db.refresh(user)
+            logger.info(f"{provider} OAuth user registered: {email} (ID: {user.id})")
+        else:
+            if user.email_verified_at is None:
+                user.email_verified_at = datetime.now(timezone.utc)
+                await self.db.commit()
+
+            if not user.is_active:
+                raise UserInactiveException(user_id=user.id)
+
+        access_token = create_access_token(subject=str(user.id))
+        return TokenResponse(access_token=access_token, token_type="bearer")
+
+    async def google_auth(self, id_token_str: str) -> TokenResponse:
+        """Authenticate or register a user via Google OAuth.
+
+        Args:
+            id_token_str: Google ID token from frontend
+
+        Returns:
+            TokenResponse with JWT access token
+
+        Raises:
+            GoogleAuthException: If token verification fails
+            UserInactiveException: If user is inactive
+        """
+        from google.auth.transport import requests as google_requests
+        from google.oauth2 import id_token as google_id_token
+
+        from src.core.config import settings
+
+        if not settings.GOOGLE_CLIENT_ID:
+            raise GoogleAuthException(detail="Google OAuth is not configured")
+
+        try:
+            idinfo = google_id_token.verify_oauth2_token(
+                id_token_str,
+                google_requests.Request(),
+                settings.GOOGLE_CLIENT_ID,
+            )
+        except ValueError:
+            raise GoogleAuthException(detail="Invalid Google token")
+
+        email: str = idinfo["email"]
+        if not idinfo.get("email_verified", False):
+            raise GoogleAuthException(detail="Google email is not verified")
+
+        return await self._oauth_login_or_register(
+            email=email,
+            first_name=idinfo.get("given_name", ""),
+            last_name=idinfo.get("family_name", ""),
+            provider="Google",
+        )
+
+    async def microsoft_auth(self, id_token_str: str) -> TokenResponse:
+        """Authenticate or register a user via Microsoft OAuth.
+
+        Args:
+            id_token_str: Microsoft ID token from frontend
+
+        Returns:
+            TokenResponse with JWT access token
+
+        Raises:
+            MicrosoftAuthException: If token verification fails
+            UserInactiveException: If user is inactive
+        """
+        import jwt as pyjwt
+
+        from src.core.config import settings
+
+        if not settings.MICROSOFT_CLIENT_ID:
+            raise MicrosoftAuthException(detail="Microsoft OAuth is not configured")
+
+        jwks_url = "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+
+        try:
+            jwks_client = pyjwt.PyJWKClient(jwks_url)
+            signing_key = jwks_client.get_signing_key_from_jwt(id_token_str)
+            payload = pyjwt.decode(
+                id_token_str,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=settings.MICROSOFT_CLIENT_ID,
+                options={"verify_iss": False},
+            )
+        except pyjwt.exceptions.PyJWTError:
+            raise MicrosoftAuthException(detail="Invalid Microsoft token")
+
+        email: str | None = payload.get("preferred_username") or payload.get("email")
+        if not email:
+            raise MicrosoftAuthException(detail="Microsoft token missing email")
+
+        return await self._oauth_login_or_register(
+            email=email,
+            first_name=payload.get("given_name", ""),
+            last_name=payload.get("family_name", ""),
+            provider="Microsoft",
+        )
+
+    async def get_user_by_id(self, user_id: uuid.UUID) -> User:
+        """Get user by ID.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            User object
+
+        Raises:
+            UserNotFoundException: If user not found
+        """
+        user = await self.user_repo.get_by_id(user_id)
+
+        if not user:
+            logger.warning(f"User not found: {user_id}")
+            raise UserNotFoundException(user_id=user_id)
+
+        return user

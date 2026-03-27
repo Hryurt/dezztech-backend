@@ -1,0 +1,129 @@
+import enum
+import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import Boolean, DateTime, Enum, String, Uuid
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.domains.auth.utils import hash_password, validate_password_strength, verify_password
+from src.core.database import Base
+from src.core.models import TimestampMixin
+
+if TYPE_CHECKING:
+    from src.domains.companies.models import UserCompany
+
+
+class UserRole(str, enum.Enum):
+    USER = "user"
+    ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
+
+
+class User(Base, TimestampMixin):
+    """User model for authentication and user management."""
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True
+    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(
+            UserRole,
+            name="user_role",
+            values_callable=lambda enum: [e.value for e in enum],
+        ),
+        nullable=False,
+        default=UserRole.USER,
+    )
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    how_did_you_hear: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    pending_email: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        unique=False,
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    password_reset_tokens = relationship(
+        "PasswordResetToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    companies: Mapped[list["UserCompany"]] = relationship(
+        "UserCompany",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    subscription: Mapped["UserSubscription"] = relationship(
+        "UserSubscription",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, email={self.email})>"
+
+    @property
+    def full_name(self) -> str | None:
+        """Full name from first_name and last_name."""
+        return " ".join(filter(None, [self.first_name, self.last_name])) or None
+
+    # ──────────────────────────────────────────────
+    # Domain Methods (Instance Methods)
+    # ──────────────────────────────────────────────
+
+    def activate(self) -> None:
+        """Activate user account."""
+        self.is_active = True
+
+    def deactivate(self) -> None:
+        """Deactivate user account."""
+        self.is_active = False
+
+    @property
+    def has_password(self) -> bool:
+        """Check if user has a password set."""
+        return self.password_hash is not None
+
+    def check_password(self, password: str) -> bool:
+        """Verify password against stored hash.
+
+        Args:
+            password: Plain text password to verify
+
+        Returns:
+            True if password matches, False otherwise
+        """
+        if self.password_hash is None:
+            return False
+        return verify_password(password, self.password_hash)
+
+    def set_password(self, password: str) -> None:
+        """Hash and set user password.
+
+        Args:
+            password: Plain text password to hash
+        """
+        validate_password_strength(password)
+        self.password_hash = hash_password(password)
+
+    def is_locked(self) -> bool:
+        """Check if account is locked.
+
+        Returns:
+            False (future feature - will implement login attempts tracking)
+        """
+        # Future feature: implement login attempts tracking
+        return False
+

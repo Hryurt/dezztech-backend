@@ -5,17 +5,19 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.auth.router import router as auth_router
-from src.users.router import router as users_router
-from src.config import settings
-from src.exceptions import (
+from src.domains.auth.router import router as auth_router
+from src.domains.companies.router import router as companies_router
+from src.domains.subscriptions.router import router as subscriptions_router
+from src.domains.users.router import router as users_router
+from src.core.config import settings
+from src.core.exceptions import (
     AppException,
     app_exception_handler,
     http_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
-from src.logger import get_logger
+from src.core.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -107,4 +109,6 @@ async def root():
 
 # Include routers
 app.include_router(auth_router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
+app.include_router(companies_router, prefix=f"{settings.API_V1_PREFIX}")
 app.include_router(users_router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])
+app.include_router(subscriptions_router, prefix=f"{settings.API_V1_PREFIX}/subscriptions", tags=["Subscriptions"])
